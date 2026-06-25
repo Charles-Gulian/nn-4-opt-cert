@@ -1,4 +1,4 @@
-name: icnn4opt
+name: nn4opt
 channels:
   - conda-forge
   - defaults

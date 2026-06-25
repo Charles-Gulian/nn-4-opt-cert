@@ -1,0 +1,30 @@
+Construct the second-order Lasserre (moment/SOS) SDP relaxation for the following inverse kinematics QCQP.
+Start from the QCQP with decision variables
+[ (c_1,s_1,c_2,s_2,x_e,y_e), ]
+where (x_d) and (y_d) are parameters (not optimization variables). The objective is
+[ (x_e-x_d)^2 + (y_e-y_d)^2, ]
+subject to
+[ c_1^2+s_1^2=1,\qquad c_2^2+s_2^2=1, ]
+and
+[ x_e=l_1c_1+l_2(c_1c_2-s_1s_2), ]
+[ y_e=l_1s_1+l_2(s_1c_2+c_1s_2). ]
+Implement the order-2 Lasserre relaxation, not the Shor relaxation.
+Specifically:
+	1	Construct the complete monomial basis of degree at most 2 in the six decision variables.
+	2	Build the order-2 moment matrix (M_2(y)).
+	3	Construct the localizing matrices corresponding to every equality constraint. Since every constraint has degree 2, these should be order-1 localizing matrices.
+	4	Express the objective as a linear function of the moment variables using the Riesz functional.
+	5	Enforce:
+	◦	(M_2(y)\succeq0),
+	◦	all localizing matrix constraints,
+	◦	normalization (y_{\mathbf 0}=1).
+	6	Implement the resulting SDP in CVXPY.
+Please do not hard-code the moment matrix. Instead, generate it automatically from the monomial basis and multi-indices so the implementation is easily extensible to larger problems.
+Before coding, independently verify:
+	•	the monomial ordering,
+	•	all multi-index bookkeeping,
+	•	construction of the moment matrix,
+	•	construction of the localizing matrices,
+	•	the objective mapping,
+	•	and the dimensions of every matrix.
+Treat (l_1,l_2,x_d,y_d) as parameters that can be changed without modifying the SDP construction.

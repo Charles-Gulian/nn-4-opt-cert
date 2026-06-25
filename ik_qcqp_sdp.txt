@@ -1,0 +1,15 @@
+2-link planar IK QCQP and SDP relaxation
+
+QCQP: variables c1,s1,c2,s2,xe,ye min (xe-xd)^2 + (ye-yd)^2 s.t.
+c1^(2+s1)2=1, c2^(2+s2)2=1 xe = l1 c1 + l2(c1 c2 - s1 s2) ye = l1 s1 +
+l2(s1 c2 + c1 s2)
+
+SDP relaxation: z=[1,c1,s1,c2,s2,xe,ye] X=zz^T, drop rank-1, X >= 0
+
+constraints: X22+X33=1, X44+X55=1, X11=1 X16=l1 X12 + l2 (X24 - X35)
+X17=l1 X13 + l2 (X34 + X25)
+
+objective is linear in X
+
+Implement QCQP in Pyomo and SDP in CVXPY. Double-check all index
+mappings and algebra.

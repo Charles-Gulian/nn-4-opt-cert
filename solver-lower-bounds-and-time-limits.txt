@@ -1,0 +1,1 @@
+Idea: when running SDP problems in parallel, perhaps add a time limit for the solver for each data point. E.g., no more than 5 minutes may be spent per data point, and then we take any lower or upper bound available from the solver as the data point. 

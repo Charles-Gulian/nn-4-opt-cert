@@ -1,0 +1,1 @@
+Idea for paper extension / follow-up (for quals): apply this method to time-varying matrix sensing, and time-varying AC-OPF; investigate online learning.
