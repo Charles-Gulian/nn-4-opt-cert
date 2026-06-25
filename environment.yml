@@ -1,24 +1,26 @@
 name: nn4opt
 channels:
+  - mosek
+  - pytorch
   - conda-forge
   - defaults
 dependencies:
   - python=3.11
   - numpy
+  - pandas
   - scipy
   - matplotlib
-  - pandas
-  - tensorflow
-  - ipopt
-  - jupyterlab
-  - tqdm
-  - pytorch
-  - torchvision
-  - torchaudio
   - scikit-learn
-  - pip
-  - pip:
-      - cvxpy
-      - pyomo
-      - pypower
-      - pandapower
+  - tqdm
+  - jupyter
+  - ipykernel
+  # Optimisation
+  - cvxpy
+  - mosek          # includes the MOSEK solver; requires a valid mosek.lic
+  - pyomo
+  - ipopt          # local NLP solver (used via Pyomo for IK)
+  # Power systems
+  - pandapower
+  # PyTorch (CPU-only — no GPU on most Savio compute nodes for this workload)
+  - pytorch::pytorch
+  - pytorch::cpuonly
