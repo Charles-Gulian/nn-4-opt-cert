@@ -8,7 +8,8 @@ N_WORKERS=56          # CPUs per node on savio3
 N_TRAIN=10000
 N_TEST=5000
 SEED=11
-PARTITION="savio4_htc"    # adjust to your target partition
+PARTITION="savio4_htc"
+ACCOUNT="fc_power"
 TIME="24:00:00"
 
 for CASE in case9 case14 case39; do
@@ -26,6 +27,7 @@ for CASE in case9 case14 case39; do
 #SBATCH --cpus-per-task=${N_WORKERS}
 #SBATCH --time=${TIME}
 #SBATCH --partition=${PARTITION}
+#SBATCH --account=${ACCOUNT}
 
 echo "Starting ${JOB_NAME} on \$(hostname) at \$(date)"
 echo "CPUs allocated: \${SLURM_CPUS_PER_TASK}"
