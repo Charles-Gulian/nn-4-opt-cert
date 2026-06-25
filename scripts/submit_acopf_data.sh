@@ -40,7 +40,8 @@ python $SCRIPT \\
     --n-train ${N_TRAIN} \\
     --n-test ${N_TEST} \\
     --seed ${SEED} \\
-    --n-workers ${N_WORKERS}
+    --n-workers ${N_WORKERS} \\
+    --checkpoint-evert 500
 
 echo "Finished ${JOB_NAME} at \$(date)"
 EOF
