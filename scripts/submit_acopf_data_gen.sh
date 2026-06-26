@@ -6,7 +6,7 @@
 
 # ── job configuration ─────────────────────────────────────────────────────────
 CASE="case14"          # case9 | case14 | case39 | case89pegase | case118 | case300 | case1354pegase
-RELAX="socp"           # socp  | sdp
+RELAX="socp"           # socp  | chordal_sdp | sdp
 
 N_TRAIN=10000
 N_TEST=5000
