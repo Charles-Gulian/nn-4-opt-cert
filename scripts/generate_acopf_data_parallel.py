@@ -87,10 +87,10 @@ def _mosek_params(case_name, relaxation):
 _W_args = None
 
 
-def _worker_init(case_name: str, relaxation: str):
+def _worker_init(case_name: str, relaxation: str, v_min=None, v_max=None):
     """Build network + CVXPY problem once per worker process."""
     global _W_args
-    net, nd = load_network(case_name)
+    net, nd = load_network(case_name, v_min=v_min, v_max=v_max)
     cache = {}
     _W_args = {
         "nd": nd, "net": net, "case_name": case_name,
@@ -150,6 +150,7 @@ def _label_parallel_checkpointed(
     X, feat_cols, include_local,
     n_workers, case_name, relaxation,
     csv_path, checkpoint_every, desc,
+    v_min=None, v_max=None,
 ):
     """Label X in checkpoint batches, appending each batch to csv_path.
 
@@ -179,7 +180,7 @@ def _label_parallel_checkpointed(
     with mp.Pool(
         processes=n_workers,
         initializer=_worker_init,
-        initargs=(case_name, relaxation),
+        initargs=(case_name, relaxation, v_min, v_max),
     ) as pool:
         chunksize = max(1, len(tasks) // (n_workers * 8))
         result_iter = pool.imap_unordered(_label_one, tasks, chunksize=chunksize)
@@ -236,6 +237,10 @@ def main():
         description="Parallel AC-OPF data generation with checkpointing."
     )
     parser.add_argument("--case",              default="case14")
+    parser.add_argument("--v-min",             type=float, default=None,
+                        help="Override voltage lower bound [pu] (default: pandapower case value)")
+    parser.add_argument("--v-max",             type=float, default=None,
+                        help="Override voltage upper bound [pu] (default: pandapower case value)")
     parser.add_argument("--relaxation",        default="socp",
                         choices=["socp", "sdp", "chordal_sdp"])
     parser.add_argument("--n-train",           type=int, default=10_000)
@@ -265,7 +270,7 @@ def main():
     print(f"Checkpoint every : {args.checkpoint_every} rows")
     print(flush=True)
 
-    net, nd = load_network(case_name)
+    net, nd = load_network(case_name, v_min=args.v_min, v_max=args.v_max)
     feat_cols = _col_names(nd)
     args_base = {
         "nd": nd, "net": net, "case_name": case_name,
@@ -288,6 +293,7 @@ def main():
             n_workers=n_workers, case_name=case_name, relaxation=relaxation,
             csv_path=train_csv, checkpoint_every=args.checkpoint_every,
             desc=f"Train [{relaxation.upper()}]",
+            v_min=args.v_min, v_max=args.v_max,
         )
 
     # ── test set ──────────────────────────────────────────────────────────────
@@ -305,6 +311,7 @@ def main():
             n_workers=n_workers, case_name=case_name, relaxation=relaxation,
             csv_path=test_csv, checkpoint_every=args.checkpoint_every,
             desc=f"Test  [{relaxation.upper()} + IPOPT]",
+            v_min=args.v_min, v_max=args.v_max,
         )
 
         # Print gap stats if complete.

@@ -12,10 +12,19 @@ PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 TIME="24:00:00"
 
+# Per-case voltage bound overrides (empty string = use pandapower defaults)
+declare -A V_MIN_MAP=( ["case300"]="0.90" )
+declare -A V_MAX_MAP=( ["case300"]="1.10" )
+
 for CASE in case9 case14 case39; do
   for RELAX in socp sdp; do
 
     JOB_NAME="acopf_${CASE}_${RELAX}"
+
+    # Build optional voltage-bound flags for this case
+    V_FLAGS=""
+    [ -n "${V_MIN_MAP[$CASE]}" ] && V_FLAGS="$V_FLAGS --v-min ${V_MIN_MAP[$CASE]}"
+    [ -n "${V_MAX_MAP[$CASE]}" ] && V_FLAGS="$V_FLAGS --v-max ${V_MAX_MAP[$CASE]}"
 
     sbatch <<EOF
 #!/bin/bash
@@ -43,7 +52,8 @@ python $SCRIPT \\
     --n-test ${N_TEST} \\
     --seed ${SEED} \\
     --n-workers ${N_WORKERS} \\
-    --checkpoint-every 500
+    --checkpoint-every 500 \\
+    ${V_FLAGS}
 
 echo "Finished ${JOB_NAME} at \$(date)"
 EOF

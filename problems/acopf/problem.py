@@ -755,25 +755,15 @@ def solve_relaxation(p, args=None):
     solver      = args.get("solver", _default_solver)
     solver_opts = args.get("solver_opts", {})
 
-    def _solve_with_fallback(prob, primary_solver):
-        """Try primary solver; fall back to CLARABEL if it raises SolverError.
-
-        MOSEK sometimes raises SolverError instead of returning status='infeasible'.
-        CLARABEL is memory-safe and robust for both SOCP and SDP fallback.
-
-        Extra kwargs can be passed via args["solver_opts"].
-        """
-        try:
-            prob.solve(solver=primary_solver, verbose=False, **solver_opts)
-        except cp.error.SolverError:
-            prob.solve(solver=cp.CLARABEL, verbose=False)
+    def _solve(prob, solver):
+        prob.solve(solver=solver, verbose=False, **solver_opts)
 
     # Set demand parameters and solve.
     if relaxation == "sdp":
         prob, Pd_param, Qd_param, X, P_g, Q_g = built
         Pd_param.value = Pd
         Qd_param.value = Qd
-        _solve_with_fallback(prob, solver)
+        _solve(prob, solver)
         value = float(prob.value) if prob.status in ("optimal", "optimal_inaccurate") else np.nan
 
         # Exactness: rank-1 ↔ second-largest eigenvalue negligible.
@@ -786,7 +776,7 @@ def solve_relaxation(p, args=None):
         prob, Pd_param, Qd_param, bag_vars, bags, P_g, Q_g = built
         Pd_param.value = Pd
         Qd_param.value = Qd
-        _solve_with_fallback(prob, solver)
+        _solve(prob, solver)
         value = float(prob.value) if prob.status in ("optimal", "optimal_inaccurate") else np.nan
 
         # Exactness: every bag's second-largest eigenvalue is negligible.
@@ -807,7 +797,7 @@ def solve_relaxation(p, args=None):
         prob, Pd_param, Qd_param, u, c_var, s_var, P_g, Q_g = built
         Pd_param.value = Pd
         Qd_param.value = Qd
-        _solve_with_fallback(prob, solver)
+        _solve(prob, solver)
         value = float(prob.value) if prob.status in ("optimal", "optimal_inaccurate") else np.nan
 
         # Exactness: all Jabr constraints binding ↔ c²+s² == u_k*u_m.

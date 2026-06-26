@@ -14,6 +14,11 @@ SEED=11
 N_WORKERS=56
 CHECKPOINT_EVERY=500
 
+# Voltage bounds override (leave empty to use pandapower case defaults)
+# For case300 use: V_MIN=0.90  V_MAX=1.10
+V_MIN=""
+V_MAX=""
+
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 TIME="24:00:00"
@@ -22,6 +27,11 @@ CONDA_ENV="nn4opt"
 
 SCRIPT="scripts/generate_acopf_data_parallel.py"
 JOB_NAME="acopf_${CASE}_${RELAX}"
+
+# Build optional voltage-bound flags
+V_FLAGS=""
+[ -n "$V_MIN" ] && V_FLAGS="$V_FLAGS --v-min ${V_MIN}"
+[ -n "$V_MAX" ] && V_FLAGS="$V_FLAGS --v-max ${V_MAX}"
 
 mkdir -p logs
 
@@ -50,7 +60,8 @@ python ${SCRIPT} \\
     --n-test ${N_TEST} \\
     --seed ${SEED} \\
     --n-workers ${N_WORKERS} \\
-    --checkpoint-every ${CHECKPOINT_EVERY}
+    --checkpoint-every ${CHECKPOINT_EVERY} \\
+    ${V_FLAGS}
 
 echo "Finished ${JOB_NAME} at \$(date)"
 EOF
