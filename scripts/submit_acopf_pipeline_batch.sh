@@ -16,8 +16,8 @@ TIME="24:00:00"
 declare -A V_MIN_MAP=( ["case300"]="0.90" )
 declare -A V_MAX_MAP=( ["case300"]="1.10" )
 
-for CASE in case9 case14 case39; do
-  for RELAX in socp sdp; do
+for CASE in case89pegase case118 case300; do
+  for RELAX in socp chordal_sdp; do
 
     JOB_NAME="acopf_${CASE}_${RELAX}"
 
