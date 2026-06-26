@@ -52,8 +52,8 @@ python $SCRIPT \\
     --n-test ${N_TEST} \\
     --seed ${SEED} \\
     --n-workers ${N_WORKERS} \\
-    --checkpoint-every 500 \\
-    ${V_FLAGS}
+    --checkpoint-every 500${V_FLAGS:+ \\
+    ${V_FLAGS}}
 
 echo "Finished ${JOB_NAME} at \$(date)"
 EOF

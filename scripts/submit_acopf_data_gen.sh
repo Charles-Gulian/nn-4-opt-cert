@@ -60,8 +60,8 @@ python ${SCRIPT} \\
     --n-test ${N_TEST} \\
     --seed ${SEED} \\
     --n-workers ${N_WORKERS} \\
-    --checkpoint-every ${CHECKPOINT_EVERY} \\
-    ${V_FLAGS}
+    --checkpoint-every ${CHECKPOINT_EVERY}${V_FLAGS:+ \\
+    ${V_FLAGS}}
 
 echo "Finished ${JOB_NAME} at \$(date)"
 EOF
