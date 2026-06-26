@@ -80,14 +80,15 @@ def _branch_topology(Y, threshold=1e-8):
     included — they create off-diagonal Y entries that net.line does not cover.
     We enumerate undirected pairs k < m where |Y[k,m]| or |Y[m,k]| is nonzero.
     """
-    n = Y.shape[0]
-    branch_from, branch_to = [], []
-    for k in range(n):
-        for m in range(k + 1, n):
-            if abs(Y[k, m]) > threshold or abs(Y[m, k]) > threshold:
-                branch_from.append(k)
-                branch_to.append(m)
-    return np.array(branch_from, dtype=int), np.array(branch_to, dtype=int)
+    import scipy.sparse as sp
+    # Convert to sparse and find nonzero off-diagonal upper-triangle entries.
+    # |Y| + |Y.T| is nonzero wherever either Y[k,m] or Y[m,k] is nonzero.
+    Ys = sp.csr_matrix(Y)
+    upper = sp.triu(np.abs(Ys) + np.abs(Ys.T), k=1)
+    upper.eliminate_zeros()
+    upper = upper > threshold
+    fr, to = upper.nonzero()
+    return fr.astype(int), to.astype(int)
 
 
 def _generator_data(net, bus_id_to_idx):
@@ -141,12 +142,21 @@ def _generator_data(net, bus_id_to_idx):
 
 # ── public API ────────────────────────────────────────────────────────────────
 
-def load_network(case_name=DEFAULT_CASE):
+def load_network(case_name=DEFAULT_CASE, v_min=None, v_max=None):
     """Load a pandapower IEEE test case and extract a NetworkData object.
+
+    Parameters
+    ----------
+    case_name : str
+    v_min, v_max : float or None
+        If provided, override the per-bus voltage bounds in the pandapower
+        case with a single uniform value.  Useful for large cases (e.g.
+        case300) whose pandapower bounds are tighter than the standard
+        MATPOWER defaults and render the OPF infeasible at nominal demand.
 
     Returns
     -------
-    net : pandapower network (used directly by solve_local)
+    net : pandapower network (used by solve_local_pypower; kept for reference)
     nd  : NetworkData with all constant arrays for the relaxations
     """
     net = getattr(pn, case_name)()
@@ -174,14 +184,21 @@ def load_network(case_name=DEFAULT_CASE):
     pd_nominal   = net.load["p_mw"].values.copy().astype(float)
     qd_nominal   = net.load["q_mvar"].values.copy().astype(float)
 
+    v_min_arr = net.bus["min_vm_pu"].values.astype(float)
+    v_max_arr = net.bus["max_vm_pu"].values.astype(float)
+    if v_min is not None:
+        v_min_arr = np.full(n_buses, float(v_min))
+    if v_max is not None:
+        v_max_arr = np.full(n_buses, float(v_max))
+
     nd = NetworkData(
         n_buses=n_buses,
         n_gens=len(gen_bus_idx),
         n_loads=len(pd_nominal),
         baseMVA=float(net.sn_mva),
         bus_ids=bus_ids,
-        v_min=net.bus["min_vm_pu"].values.astype(float),
-        v_max=net.bus["max_vm_pu"].values.astype(float),
+        v_min=v_min_arr,
+        v_max=v_max_arr,
         slack_idx=slack_idx,
         v_ref=v_ref,
         Y=Y,

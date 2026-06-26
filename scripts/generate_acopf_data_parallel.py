@@ -64,14 +64,24 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 CHECKPOINT_EVERY = 500   # rows per flush; override with --checkpoint-every
 
-_MOSEK_PARAMS = {
-    "mosek_params": {
-        "MSK_IPAR_NUM_THREADS":            1,
-        "MSK_DPAR_INTPNT_CO_TOL_REL_GAP": 1e-6,
-        "MSK_DPAR_INTPNT_CO_TOL_PFEAS":   1e-6,
-        "MSK_DPAR_INTPNT_CO_TOL_DFEAS":   1e-6,
-    }
+_MOSEK_PARAMS_BASE = {
+    "MSK_IPAR_NUM_THREADS":            1,
+    "MSK_DPAR_INTPNT_CO_TOL_REL_GAP": 1e-6,
+    "MSK_DPAR_INTPNT_CO_TOL_PFEAS":   1e-6,
+    "MSK_DPAR_INTPNT_CO_TOL_DFEAS":   1e-6,
 }
+
+# Per-case time limits (seconds). Only applied for SDP; SOCP is fast regardless.
+_SDP_TIME_LIMITS = {
+    "case300": 300.0,
+}
+
+def _mosek_params(case_name, relaxation):
+    params = dict(_MOSEK_PARAMS_BASE)
+    # Apply per-case time limits to SDP-based relaxations only (SOCP is fast regardless).
+    if relaxation in ("sdp", "chordal_sdp") and case_name in _SDP_TIME_LIMITS:
+        params["MSK_DPAR_OPTIMIZER_MAX_TIME"] = _SDP_TIME_LIMITS[case_name]
+    return {"mosek_params": params}
 
 # ── per-worker state (initialised once per process) ───────────────────────────
 _W_args = None
@@ -86,7 +96,7 @@ def _worker_init(case_name: str, relaxation: str):
         "nd": nd, "net": net, "case_name": case_name,
         "relaxation": relaxation,
         "prob_cache": cache,
-        "solver_opts": _MOSEK_PARAMS,
+        "solver_opts": _mosek_params(case_name, relaxation),
     }
     # Warm the CVXPY problem cache at nominal demand.
     p_nom = np.hstack([nd.pd_nominal, nd.qd_nominal])
@@ -225,10 +235,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Parallel AC-OPF data generation with checkpointing."
     )
-    parser.add_argument("--case",              default="case14",
-                        choices=["case9", "case14", "case39"])
+    parser.add_argument("--case",              default="case14")
     parser.add_argument("--relaxation",        default="socp",
-                        choices=["socp", "sdp"])
+                        choices=["socp", "sdp", "chordal_sdp"])
     parser.add_argument("--n-train",           type=int, default=10_000)
     parser.add_argument("--n-test",            type=int, default=5_000)
     parser.add_argument("--seed",              type=int, default=42)

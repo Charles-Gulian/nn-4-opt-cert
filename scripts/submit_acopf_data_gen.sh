@@ -5,7 +5,7 @@
 # Edit the variables below before submitting.
 
 # ── job configuration ─────────────────────────────────────────────────────────
-CASE="case14"          # case9 | case14 | case39
+CASE="case14"          # case9 | case14 | case39 | case89pegase | case118 | case300 | case1354pegase
 RELAX="socp"           # socp  | sdp
 
 N_TRAIN=10000
