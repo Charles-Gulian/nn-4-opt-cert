@@ -12,10 +12,13 @@ CHECKPOINT_EVERY=500
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 TIME="24:00:00"
-# Measured steady-state footprint is ~0.5 GB/worker -> ~33 GB at 56 workers.
-# savio4_htc nodes have 257 GB (some 515 GB); requesting 256G would NOT fit the
-# 257 GB nodes, so we request 64 GB — ~2x margin and schedulable on any node.
-MEM="64G"
+# Memory: the 4-worker steady-state footprint (~0.5 GB/worker) badly under-
+# predicts the real peak, because all 56 workers initialise at once and the
+# chordal_sdp path re-canonicalises on EVERY solve (ignore_dpp), so up to 56
+# multi-GB canonicalization transients overlap.  A 64 GB cap OOM-killed
+# case1354 chordal.  savio4_htc nodes have 257 GB (some 515 GB); request 200 GB
+# (fits the 257 GB nodes, leaves ample room for concurrent canonicalization).
+MEM="200G"
 
 # Dry-run mode: `DRY_RUN=1 bash scripts/submit_acopf_pipeline_batch.sh` submits
 # every config with just 5 train / 5 test samples and a short wall clock, to
@@ -24,7 +27,7 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   N_TRAIN=5
   N_TEST=5
   CHECKPOINT_EVERY=2
-  TIME="00:30:00"
+  TIME="01:00:00"
   echo "*** DRY RUN: ${N_TRAIN} train / ${N_TEST} test, time=${TIME} ***"
 fi
 

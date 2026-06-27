@@ -22,10 +22,13 @@ V_MAX=""
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 TIME="24:00:00"
-# Measured steady-state footprint is ~0.5 GB/worker -> ~33 GB at 56 workers.
-# savio4_htc nodes have 257 GB (some 515 GB); requesting 256G would NOT fit the
-# 257 GB nodes, so we request 64 GB — ~2x margin and schedulable on any node.
-MEM="64G"
+# Memory: the 4-worker steady-state footprint (~0.5 GB/worker) badly under-
+# predicts the real peak, because all 56 workers initialise at once and the
+# chordal_sdp path re-canonicalises on EVERY solve (ignore_dpp), so up to 56
+# multi-GB canonicalization transients overlap.  A 64 GB cap OOM-killed
+# case1354 chordal.  savio4_htc nodes have 257 GB (some 515 GB); request 200 GB
+# (fits the 257 GB nodes, leaves ample room for concurrent canonicalization).
+MEM="200G"
 CONDA_ENV="nn4opt"
 # ─────────────────────────────────────────────────────────────────────────────
 
