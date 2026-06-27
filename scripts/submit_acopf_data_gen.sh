@@ -22,6 +22,10 @@ V_MAX=""
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 TIME="24:00:00"
+# High-memory allocation: the largest cases peak at ~1.8 GB/worker (case2869
+# SOCP), so 56 workers can need ~100 GB.  256 GB leaves ~2.5x margin.  Confirm
+# the partition's per-node RAM is >= this before submitting.
+MEM="256G"
 CONDA_ENV="nn4opt"
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,6 +47,7 @@ sbatch <<EOF
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=${N_WORKERS}
+#SBATCH --mem=${MEM}
 #SBATCH --time=${TIME}
 #SBATCH --partition=${PARTITION}
 #SBATCH --account=${ACCOUNT}

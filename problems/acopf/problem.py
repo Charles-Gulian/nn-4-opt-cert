@@ -397,10 +397,11 @@ def _build_sdp_problem(nd: NetworkData):
     ]
 
     # ── objective: cost with P_g in per-unit ─────────────────────────────
+    c2_sqrt = np.sqrt(np.maximum(nd.cost_c2, 0.0)) * S
     cost_expr = (
         nd.cost_c0.sum()
         + nd.cost_c1 @ (S * P_g)
-        + cp.quad_form(P_g, np.diag(nd.cost_c2 * S**2))
+        + cp.sum_squares(cp.multiply(c2_sqrt, P_g))
     )
     prob = cp.Problem(cp.Minimize(cost_expr), constraints)
     return prob, Pd_param, Qd_param, X, P_g, Q_g
@@ -459,16 +460,22 @@ def _build_socp_problem(nd: NetworkData):
     constraints.append(u[nd.slack_idx] == nd.v_ref ** 2)
 
     # ── SOCP (Jabr) constraints per branch ─────────────────────────────────
-    # Each branch e (from k→m): ||[2c_e, 2s_e, u_k - u_m]||_2 <= u_k + u_m
-    # cp.norm does not support axis= for per-column norms, so we keep the
-    # per-branch loop.  nb is O(branches) ~ O(n), not O(n²), so this is fine.
+    # Each branch e: ||[2c_e, 2s_e, u[fr_e] - u[to_e]]||_2 <= u[fr_e] + u[to_e]
+    # Use cp.SOC(t, X) which accepts vector t and matrix X, emitting one
+    # vectorized cone rather than nb separate expression-tree nodes.  The loop
+    # formulation caused CVXPY to build nb individual expression trees whose
+    # canonicalization blew up memory for large cases (nb ~ 1710 for case1354).
     fr = nd.branch_from
     to = nd.branch_to
-    for e, (k, m) in enumerate(zip(fr, to)):
-        constraints.append(
-            cp.norm(cp.hstack([2 * c_var[e], 2 * s_var[e], u[k] - u[m]]))
-            <= u[k] + u[m]
-        )
+    # t: (nb,)  upper bound per branch
+    # X: (3, nb) stacked cone body — rows are [2c, 2s, u_fr - u_to]
+    soc_t = u[fr] + u[to]
+    soc_X = cp.vstack([
+        2 * c_var,
+        2 * s_var,
+        u[fr] - u[to],
+    ])
+    constraints.append(cp.SOC(soc_t, soc_X))
 
     # ── power balance at each bus (vectorized) ────────────────────────────
     # Build sparse coefficient matrices A_Pc, A_Ps, A_Qc, A_Qs (n × nb)
@@ -539,10 +546,15 @@ def _build_socp_problem(nd: NetworkData):
         nd.qg_min / S <= Q_g, Q_g <= nd.qg_max / S,
     ]
 
+    # cp.quad_form with a dense diagonal matrix forces CVXPY to build a dense
+    # quadratic form internally, blowing up memory for large cases.  Using
+    # cp.sum_squares on scaled variables stays sparse and is equivalent since
+    # the cost matrix is diagonal: P_g^T diag(c2*S^2) P_g = ||sqrt(c2)*S*P_g||^2.
+    c2_sqrt = np.sqrt(np.maximum(nd.cost_c2, 0.0)) * S
     cost_expr = (
         nd.cost_c0.sum()
         + nd.cost_c1 @ (S * P_g)
-        + cp.quad_form(P_g, np.diag(nd.cost_c2 * S**2))
+        + cp.sum_squares(cp.multiply(c2_sqrt, P_g))
     )
     prob = cp.Problem(cp.Minimize(cost_expr), constraints)
     return prob, Pd_param, Qd_param, u, c_var, s_var, P_g, Q_g
@@ -592,12 +604,31 @@ def _build_chordal_sdp_problem(nd: NetworkData):
     # ── Step 1: tree decomposition ────────────────────────────────────────────
     bags, tw = greedy_elimination(nd.branch_from, nd.branch_to, n)
 
-    # ── Step 2: shared scalar variables ──────────────────────────────────────
+    # ── Step 2: shared vector variables ──────────────────────────────────────
+    # Using a single vector variable for all VV pairs (instead of a dict of
+    # scalars) lets CVXPY see one compact variable object.  Indexing into a
+    # vector variable (VV_vec[i]) produces a lightweight slice expression with
+    # no deep expression tree, avoiding the "too many subexpressions" blowup
+    # that occurs when hstack-ing thousands of individual scalar variables.
     V2 = cp.Variable(n, nonneg=True, name="V2")   # |V_k|^2, one per bus
 
-    pairs = unique_pairs_in_bags(bags)
-    # VV[(k,m)] = V_k * conj(V_m) for k < m; complex scalar
-    VV = {(k, m): cp.Variable(complex=True, name=f"VV_{k}_{m}") for (k, m) in pairs}
+    fr = nd.branch_from
+    to = nd.branch_to
+    nb = len(fr)
+
+    # Enumerate all unique pairs across bags (branches + chordal fill-in).
+    # Branch pairs (fr[e], to[e]) are placed first so VV_vec[:nb] maps 1-to-1
+    # to branches, enabling compact vectorized power balance below.
+    pairs_list = list(unique_pairs_in_bags(bags))
+    branch_set = {(f, t) for f, t in zip(fr, to)}
+    branch_pairs = [(f, t) for f, t in zip(fr, to)]           # nb entries, ordered
+    fill_pairs   = [p for p in pairs_list if p not in branch_set]
+    all_pairs    = branch_pairs + fill_pairs                   # branches first
+    pair_to_idx  = {p: i for i, p in enumerate(all_pairs)}
+    n_pairs      = len(all_pairs)
+
+    # Single complex vector: VV_vec[i] = V_{all_pairs[i][0]} * conj(V_{all_pairs[i][1]})
+    VV_vec = cp.Variable(n_pairs, complex=True, name="VV")
 
     # Generator dispatch, per-unit
     P_g = cp.Variable(nd.n_gens, name="P_g_pu")
@@ -608,69 +639,129 @@ def _build_chordal_sdp_problem(nd: NetworkData):
 
     constraints = []
 
-    # ── Step 3: per-bag Hermitian PSD variables ───────────────────────────────
+    # ── Step 3: per-bag Hermitian PSD constraints ────────────────────────────
+    # Each bag contributes one small Hermitian PSD cone.  The consistency
+    # conditions that tie bag entries to the shared V2 / VV_vec variables
+    # (W_bag[i,i] == V2[bus_i], W_bag[i,j] == VV_vec[pair]) are NOT emitted as
+    # thousands of individual scalar equality constraints — for case1354 that is
+    # ~9,800 constraint objects, and CVXPY's canonicalization (made worse by the
+    # complex2real reduction, which doubles every constraint) has per-object
+    # Python/accumulation overhead that scales roughly quadratically, blowing
+    # peak memory to tens of GB even though the final cone matrix is tiny and
+    # sparse.  Instead we flatten every bag matrix once, concatenate, and link
+    # all entries to V2 / VV_vec with TWO vectorized equalities built from a
+    # sparse 0/1 selection matrix.  This drops the constraint-object count from
+    # ~11k to ~1.4k (one PSD cone per bag + a handful of vectorized equalities).
     bag_vars = []
+    flat_parts = []
+    diag_cols, diag_targets = [], []   # positions in flattened stack -> V2 index
+    off_cols,  off_targets  = [], []   # positions in flattened stack -> VV_vec index
+    offset = 0
     for bag in bags:
-        s = len(bag)
+        s = len(bag)                      # bag is sorted ascending => bi < bj for i<j
         W_bag = cp.Variable((s, s), hermitian=True)
         constraints.append(W_bag >> 0)
-
-        # Diagonal: W_bag[i,i] = V2[bag[i]]
-        for i, bi in enumerate(bag):
-            constraints.append(cp.real(W_bag[i, i]) == V2[bi])
-
-        # Upper triangle: W_bag[i,j] = VV[(min,max)]
-        for i, bi in enumerate(bag):
-            for j in range(i + 1, len(bag)):
-                bj = bag[j]
-                k, m = (bi, bj) if bi < bj else (bj, bi)
-                if bi < bj:
-                    constraints.append(W_bag[i, j] == VV[(k, m)])
-                else:
-                    constraints.append(W_bag[i, j] == cp.conj(VV[(k, m)]))
-
         bag_vars.append(W_bag)
+        # Flatten row-major (order='C') so entry (i,j) sits at i*s + j.
+        flat_parts.append(cp.reshape(W_bag, (s * s,), order="C"))
+        for i, bi in enumerate(bag):
+            diag_cols.append(offset + i * s + i)
+            diag_targets.append(bi)
+            for j in range(i + 1, s):
+                bj = bag[j]               # bi < bj, so pair already sorted
+                off_cols.append(offset + i * s + j)
+                off_targets.append(pair_to_idx[(bi, bj)])
+        offset += s * s
 
-    # ── Step 4: helper to get W[k,m] CVXPY expression ────────────────────────
-    def _W(k, m):
-        if k == m:
-            return V2[k]
-        key = (min(k, m), max(k, m))
-        vv = VV[key]
-        return vv if k < m else cp.conj(vv)
+    allW = cp.hstack(flat_parts)          # complex vector, length = sum(s_k^2)
 
-    # ── Step 5: power balance (complex form) ──────────────────────────────────
-    def _bus_sum(vec, idx_map):
-        d = [0.0] * n
-        for i, bus in enumerate(idx_map):
-            d[bus] = d[bus] + vec[i]
-        return d
+    # Diagonal consistency: Re(W_bag[i,i]) == V2[bus_i], vectorized.
+    n_diag = len(diag_cols)
+    S_diag = sp.csr_matrix(
+        (np.ones(n_diag), (np.arange(n_diag), diag_cols)), shape=(n_diag, offset))
+    constraints.append(cp.real(allW @ S_diag.T) == V2[diag_targets])
 
-    Pd_bus = _bus_sum(Pd_param / S, nd.load_bus_idx)
-    Qd_bus = _bus_sum(Qd_param / S, nd.load_bus_idx)
-    Pg_bus = _bus_sum(P_g, nd.gen_bus_idx)
-    Qg_bus = _bus_sum(Q_g, nd.gen_bus_idx)
+    # Off-diagonal consistency: W_bag[i,j] == VV_vec[pair], vectorized (complex).
+    n_off = len(off_cols)
+    S_off = sp.csr_matrix(
+        (np.ones(n_off), (np.arange(n_off), off_cols)), shape=(n_off, offset))
+    constraints.append(allW @ S_off.T == VV_vec[off_targets])
 
-    for k in range(n):
-        # S_k = sum_m conj(Y[k,m]) * W[k,m]  (complex power injection)
-        S_inj = complex(np.conj(Y[k, k])) * V2[k]
-        for m in range(n):
-            if m == k:
-                continue
-            y_km = Y[k, m]
-            if abs(y_km) < 1e-12:
-                continue
-            key = (min(k, m), max(k, m))
-            if key not in VV:
-                # Bus pair not covered by any bag — should not happen for a
-                # valid tree decomposition, but guard defensively.
-                continue
-            S_inj = S_inj + complex(np.conj(y_km)) * _W(k, m)
+    # ── Step 4: vectorized power balance ─────────────────────────────────────
+    # VV_vec[:nb] holds the branch VV values in branch order.
+    VV_arr = VV_vec[:nb]   # (nb,) complex slice — no deep expression tree
 
-        constraints += [
-            cp.real(S_inj) == Pg_bus[k] - Pd_bus[k],
-            cp.imag(S_inj) == Qg_bus[k] - Qd_bus[k],
-        ]
+    # Off-diagonal Y entries for each branch (conj for power balance)
+    Yfr = np.conj(Y[fr, to])   # conj(Y[k,m]) for from-bus k
+    Yto = np.conj(Y[to, fr])   # conj(Y[m,k]) for to-bus m
+
+    # Diagonal Y entries (shunt terms)
+    Ydiag = np.conj(np.diag(Y))   # conj(Y[k,k]) (n,)
+
+    # Incidence matrices
+    L_inc = sp.csr_matrix(
+        (np.ones(nd.n_loads), (nd.load_bus_idx, np.arange(nd.n_loads))),
+        shape=(n, nd.n_loads))
+    G_inc = sp.csr_matrix(
+        (np.ones(nd.n_gens), (nd.gen_bus_idx, np.arange(nd.n_gens))),
+        shape=(n, nd.n_gens))
+
+    # VV_arr[e] = V_fr * conj(V_to), so:
+    #   from-bus k contribution: conj(Y[k,m]) * VV[e]
+    #   to-bus  m contribution: conj(Y[m,k]) * conj(VV[e])  = conj(Y[m,k] * VV[e])
+    # Real/imag of complex power injection vectorized over branches:
+    #   P_inj[k] = Re(conj(Y[k,k])) * V2[k]
+    #              + sum_{e: fr=k} Re(conj(Y[k,m]) * VV[e])
+    #              + sum_{e: to=k} Re(conj(Y[k,m_e]) * conj(VV[e]))
+    #            = Gdiag*V2 + A_Pfr @ Re(Yfr*VV) + A_Pto @ Re(Yto*conj(VV))
+    # where A_Pfr[k,e]=1 if fr[e]=k, A_Pto[k,e]=1 if to[e]=k.
+
+    A_fr = sp.csr_matrix(
+        (np.ones(nb), (fr, np.arange(nb))), shape=(n, nb))
+    A_to = sp.csr_matrix(
+        (np.ones(nb), (to, np.arange(nb))), shape=(n, nb))
+
+    Yfr_re = np.real(Yfr); Yfr_im = np.imag(Yfr)
+    Yto_re = np.real(Yto); Yto_im = np.imag(Yto)
+    Yd_re  = np.real(Ydiag); Yd_im = np.imag(Ydiag)
+
+    # Split VV_arr into real and imaginary parts as CVXPY expressions
+    VV_re = cp.real(VV_arr)   # (nb,)
+    VV_im = cp.imag(VV_arr)   # (nb,)
+
+    # Complex products, with correct real/imag parts.  For z = (a + jb)(c + jd):
+    #   Re(z) = a*c - b*d   and   Im(z) = a*d + b*c.
+    # from-bus term: zf = Yfr * VV          (VV = c + js)
+    # to-bus  term: zt = Yto * conj(VV)     (conj because W[m,k] = conj(W[k,m]))
+    #   Re(zf) = Yfr_re*VV_re - Yfr_im*VV_im
+    #   Im(zf) = Yfr_re*VV_im + Yfr_im*VV_re
+    #   Re(zt) = Yto_re*VV_re + Yto_im*VV_im   (conj flips sign of VV_im)
+    #   Im(zt) = Yto_im*VV_re - Yto_re*VV_im
+    # The diagonal contribution is Ydiag*V2 (V2 real): Re=Yd_re*V2, Im=Yd_im*V2.
+    # Use expr @ sparse.T (CVXPY on left) not sparse @ expr (scipy on left).
+    # The latter causes scipy to call cvxpy.__rmatmul__, which converts the
+    # sparse matrix to a dense nested-list Constant — a 1354×1710 dense matrix
+    # that blows up memory during canonicalization.
+    P_inj = (
+        cp.multiply(Yd_re, V2)
+        + (cp.multiply(Yfr_re, VV_re) - cp.multiply(Yfr_im, VV_im)) @ A_fr.T
+        + (cp.multiply(Yto_re, VV_re) + cp.multiply(Yto_im, VV_im)) @ A_to.T
+    )
+    Q_inj = (
+        cp.multiply(Yd_im, V2)
+        + (cp.multiply(Yfr_re, VV_im) + cp.multiply(Yfr_im, VV_re)) @ A_fr.T
+        + (cp.multiply(Yto_im, VV_re) - cp.multiply(Yto_re, VV_im)) @ A_to.T
+    )
+
+    Pd_bus = (Pd_param / S) @ L_inc.T
+    Qd_bus = (Qd_param / S) @ L_inc.T
+    Pg_bus = P_g @ G_inc.T
+    Qg_bus = Q_g @ G_inc.T
+
+    constraints += [
+        P_inj == Pg_bus - Pd_bus,
+        Q_inj == Qg_bus - Qd_bus,
+    ]
 
     # ── Step 6: voltage magnitude bounds ─────────────────────────────────────
     constraints += [nd.v_min ** 2 <= V2, V2 <= nd.v_max ** 2]
@@ -683,10 +774,11 @@ def _build_chordal_sdp_problem(nd: NetworkData):
     ]
 
     # ── Step 8: objective ─────────────────────────────────────────────────────
+    c2_sqrt = np.sqrt(np.maximum(nd.cost_c2, 0.0)) * S
     cost_expr = (
         nd.cost_c0.sum()
         + nd.cost_c1 @ (S * P_g)
-        + cp.quad_form(P_g, np.diag(nd.cost_c2 * S**2))
+        + cp.sum_squares(cp.multiply(c2_sqrt, P_g))
     )
     prob = cp.Problem(cp.Minimize(cost_expr), constraints)
     return prob, Pd_param, Qd_param, bag_vars, bags, P_g, Q_g
@@ -750,13 +842,27 @@ def solve_relaxation(p, args=None):
     # that exploits sparse cone structure and uses far less memory than SCS
     # (which builds an O((vars+constraints)²) internal matrix) or MOSEK (whose
     # interior-point allocations can OOM-kill on moderate-sized cases).
-    # SDP and chordal_sdp still use MOSEK — it's much faster for semidefinite cones.
-    _default_solver = cp.CLARABEL if relaxation == "socp" else cp.MOSEK
+    # CLARABEL handles both SOCP and complex Hermitian SDP (chordal_sdp) natively
+    # and is memory-frugal; MOSEK is kept only for the dense real 2n×2n SDP.
+    _default_solver = cp.MOSEK if relaxation == "sdp" else cp.CLARABEL
     solver      = args.get("solver", _default_solver)
     solver_opts = args.get("solver_opts", {})
 
+    # ignore_dpp: the SDP-based relaxations carry the demand as cp.Parameter so
+    # the problem object can be cached and re-solved per sample.  But CVXPY's DPP
+    # (parametrized) canonicalization materializes a parameter-affine tensor whose
+    # size scales with the canonical problem dimension — and with the per-bag PSD
+    # cones that dimension is large, so DPP canonicalization blows peak memory to
+    # tens of GB (OOM-killed on case1354pegase).  Setting ignore_dpp=True treats
+    # the parameters as plain constants and re-canonicalizes each solve: a tiny,
+    # sparse cone program (case1354pegase: ~0.8 GB, ~26 s, vs >128 GB OOM under
+    # DPP).  SOCP has no PSD cones, so DPP is cheap there and we keep it (caching
+    # gives fast warm re-solves), so ignore_dpp is only needed for sdp/chordal_sdp.
+    _ignore_dpp = relaxation in ("sdp", "chordal_sdp")
+
     def _solve(prob, solver):
-        prob.solve(solver=solver, verbose=False, **solver_opts)
+        prob.solve(solver=solver, verbose=False, ignore_dpp=_ignore_dpp,
+                   **solver_opts)
 
     # Set demand parameters and solve.
     if relaxation == "sdp":

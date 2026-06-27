@@ -30,13 +30,15 @@ Typical SLURM usage
 
 Solver notes
 ------------
-- MSK_IPAR_NUM_THREADS=1 per worker: total threads = n_workers, matching
-  allocated CPUs.  Letting MOSEK use multiple threads per solve while also
-  running multiple processes leads to oversubscription and slower throughput.
-- MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-6: slightly looser than the default 1e-8.
-  Still far tighter than the ~0.1% cost gaps we care about, but cuts
-  interior-point iterations noticeably on larger problems like case39.
-- SCS fallback is kept for infeasible / poorly-conditioned instances.
+- socp and chordal_sdp both solve with CLARABEL (see problem.py _default_solver).
+  CLARABEL is single-threaded by default, so n_workers processes ~= n_workers
+  threads, matching the allocated CPUs without oversubscription.
+- Per-case CLARABEL options (e.g. a wall-clock time_limit on the largest cases)
+  are configured in _CLARABEL_OPTS_BY_CASE below and passed straight through to
+  prob.solve() as keyword arguments.
+- Any solver that raises (not just returns a non-optimal status) is caught
+  per-sample in _label_one and recorded as NaN, so a single bad solve can never
+  bring down a multi-day run.
 """
 
 import argparse
@@ -64,24 +66,23 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 CHECKPOINT_EVERY = 500   # rows per flush; override with --checkpoint-every
 
-_MOSEK_PARAMS_BASE = {
-    "MSK_IPAR_NUM_THREADS":            1,
-    "MSK_DPAR_INTPNT_CO_TOL_REL_GAP": 1e-6,
-    "MSK_DPAR_INTPNT_CO_TOL_PFEAS":   1e-6,
-    "MSK_DPAR_INTPNT_CO_TOL_DFEAS":   1e-6,
+# Per-case CLARABEL options, passed directly as prob.solve() keyword arguments
+# (CLARABEL is the default solver for both socp and chordal_sdp).  Defaults are
+# fine for small/medium cases; the largest cases get a wall-clock time_limit as
+# a safety net so a single pathological sample can't stall a worker for hours.
+# NB: these are CLARABEL kwargs, NOT mosek_params — the previous MOSEK-param
+# path had no effect under CLARABEL (and passing an unknown kwarg risks erroring
+# on every solve in the real worker path).
+_CLARABEL_OPTS_BASE = {}
+_CLARABEL_OPTS_BY_CASE = {
+    "case1354pegase": {"time_limit": 600.0},
+    "case2869pegase": {"time_limit": 600.0},
 }
 
-# Per-case time limits (seconds). Only applied for SDP; SOCP is fast regardless.
-_SDP_TIME_LIMITS = {
-    "case300": 300.0,
-}
-
-def _mosek_params(case_name, relaxation):
-    params = dict(_MOSEK_PARAMS_BASE)
-    # Apply per-case time limits to SDP-based relaxations only (SOCP is fast regardless).
-    if relaxation in ("sdp", "chordal_sdp") and case_name in _SDP_TIME_LIMITS:
-        params["MSK_DPAR_OPTIMIZER_MAX_TIME"] = _SDP_TIME_LIMITS[case_name]
-    return {"mosek_params": params}
+def _solver_opts(case_name, relaxation):
+    opts = dict(_CLARABEL_OPTS_BASE)
+    opts.update(_CLARABEL_OPTS_BY_CASE.get(case_name, {}))
+    return opts
 
 # ── per-worker state (initialised once per process) ───────────────────────────
 _W_args = None
@@ -96,7 +97,7 @@ def _worker_init(case_name: str, relaxation: str, v_min=None, v_max=None):
         "nd": nd, "net": net, "case_name": case_name,
         "relaxation": relaxation,
         "prob_cache": cache,
-        "solver_opts": _mosek_params(case_name, relaxation),
+        "solver_opts": _solver_opts(case_name, relaxation),
     }
     # Warm the CVXPY problem cache at nominal demand.
     p_nom = np.hstack([nd.pd_nominal, nd.qd_nominal])
@@ -104,13 +105,27 @@ def _worker_init(case_name: str, relaxation: str, v_min=None, v_max=None):
 
 
 def _label_one(task):
-    """Label a single demand vector.  Returns (idx, cost, exact, local_cost)."""
+    """Label a single demand vector.  Returns (idx, cost, exact, local_cost).
+
+    Every solve is wrapped in try/except: a solver that *raises* (rather than
+    returning a non-optimal status) would otherwise propagate out of the worker
+    and kill the entire mp.Pool, taking the whole multi-day job down.  On any
+    exception we record NaN and continue — NaN rows are written normally and can
+    be dropped/re-run later.
+    """
     idx, p, include_local = task
-    val, res = solve_relaxation(p, args=_W_args)
+    try:
+        val, res = solve_relaxation(p, args=_W_args)
+        exact = bool(res["exact"])
+    except Exception:
+        val, exact = np.nan, False
     local_val = np.nan
     if include_local:
-        local_val, _ = solve_local(p, args=_W_args)
-    return idx, float(val), bool(res["exact"]), float(local_val)
+        try:
+            local_val, _ = solve_local(p, args=_W_args)
+        except Exception:
+            local_val = np.nan
+    return idx, float(val), exact, float(local_val)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

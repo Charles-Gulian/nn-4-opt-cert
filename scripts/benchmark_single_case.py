@@ -25,6 +25,17 @@ from problems.acopf.network import load_network
 from problems.acopf.problem import solve_local, solve_relaxation
 
 
+def _rss_mb():
+    """Resident set size of this process in MB (includes native solver allocations)."""
+    try:
+        import resource, sys
+        ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # ru_maxrss is bytes on macOS, kilobytes on Linux.
+        return ru / 1024 ** 2 if sys.platform == "darwin" else ru / 1024
+    except Exception:
+        return float("nan")
+
+
 def _solve_tracked(label, fn, *args, **kwargs):
     """Run fn(*args, **kwargs), returning (value, result, elapsed_s, peak_mb)."""
     tracemalloc.start()
@@ -34,10 +45,16 @@ def _solve_tracked(label, fn, *args, **kwargs):
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     peak_mb = peak / 1024 ** 2
+    rss = _rss_mb()
     print(f"  {label}: {value:.4f}  [{result.get('status', '?')}, "
-          f"exact={result.get('exact')}, time={elapsed:.2f}s, peak={peak_mb:.0f} MB]",
+          f"exact={result.get('exact')}, time={elapsed:.2f}s, "
+          f"tracemalloc_peak={peak_mb:.0f} MB, rss={rss:.0f} MB]",
           flush=True)
     return value, result, elapsed, peak_mb
+
+
+def _checkpoint(tag):
+    print(f"  [mem] {tag}: rss={_rss_mb():.0f} MB", flush=True)
 
 
 def main():
@@ -60,16 +77,61 @@ def main():
     results = {}
 
     print("Solving...", flush=True)
+    _checkpoint("before local")
     results["local"] = _solve_tracked(
         "Local (IPOPT)", solve_local, p, args=shared)
 
-    results["socp"] = _solve_tracked(
-        "SOCP         ", solve_relaxation, p,
-        args={**shared, "relaxation": "socp"})
+    # SOCP: instrument build, canonicalize, and solve separately.
+    import cvxpy as cp
+    from problems.acopf.problem import _build_socp_problem
+    _checkpoint("before socp build")
+    socp_built = _build_socp_problem(nd)
+    _checkpoint("after socp build")
+    prob_socp = socp_built[0]
+    Pd_param_socp, Qd_param_socp = socp_built[1], socp_built[2]
+    Pd_param_socp.value = np.asarray(p[:nd.n_loads])
+    Qd_param_socp.value = np.asarray(p[nd.n_loads:])
+    print(f"  SOCP problem: {prob_socp.size_metrics}", flush=True)
+    _checkpoint("before socp canonicalize")
+    data, chain, inverse_data = prob_socp.get_problem_data(solver=cp.CLARABEL)
+    _checkpoint("after socp canonicalize")
+    print(f"  Cone data shapes: "
+          f"A={data['A'].shape}, b={data['b'].shape}, "
+          f"c={data['c'].shape}", flush=True)
+    t0 = time.perf_counter()
+    prob_socp.solve(solver=cp.CLARABEL, verbose=True)
+    socp_time = time.perf_counter() - t0
+    _checkpoint("after socp solve")
+    socp_val = float(prob_socp.value) if prob_socp.status in ("optimal", "optimal_inaccurate") else float("nan")
+    results["socp"] = (socp_val, {"status": prob_socp.status, "exact": False}, socp_time, float("nan"))
+    print(f"  SOCP: {socp_val:.4f}  [status={prob_socp.status}, time={socp_time:.2f}s]", flush=True)
 
-    results["chordal_sdp"] = _solve_tracked(
-        "Chordal SDP  ", solve_relaxation, p,
-        args={**shared, "relaxation": "chordal_sdp"})
+    # Free all SOCP objects before building chordal SDP.
+    del socp_built, prob_socp, data, chain, inverse_data
+    import gc; gc.collect()
+    _checkpoint("after socp cleanup")
+
+    from problems.acopf.problem import _build_chordal_sdp_problem
+    _checkpoint("before chordal_sdp build")
+    chordal_built = _build_chordal_sdp_problem(nd)
+    _checkpoint("after chordal_sdp build")
+    prob_chordal, Pd_c, Qd_c = chordal_built[0], chordal_built[1], chordal_built[2]
+    Pd_c.value = np.asarray(p[:nd.n_loads])
+    Qd_c.value = np.asarray(p[nd.n_loads:])
+    _checkpoint("before chordal_sdp canonicalize")
+    # ignore_dpp=True: skip CVXPY's parametrized (DPP) canonicalization, which
+    # materializes a parameter-affine tensor sized by the canonical problem and
+    # OOMs once the per-bag PSD cones make that large (see problem.py solve path).
+    data_c, chain_c, inv_c = prob_chordal.get_problem_data(
+        solver=cp.CLARABEL, ignore_dpp=True)
+    _checkpoint("after chordal_sdp canonicalize")
+    t0 = time.perf_counter()
+    prob_chordal.solve(solver=cp.CLARABEL, verbose=False, ignore_dpp=True)
+    chordal_time = time.perf_counter() - t0
+    _checkpoint("after chordal_sdp solve")
+    chordal_val = float(prob_chordal.value) if prob_chordal.status in ("optimal", "optimal_inaccurate") else float("nan")
+    results["chordal_sdp"] = (chordal_val, {"status": prob_chordal.status, "exact": False}, chordal_time, float("nan"))
+    print(f"  Chordal SDP: {chordal_val:.4f}  [status={prob_chordal.status}, time={chordal_time:.2f}s]", flush=True)
 
     # ── summary table ─────────────────────────────────────────────────────────
     local_val = results["local"][0]
