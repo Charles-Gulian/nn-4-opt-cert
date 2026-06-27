@@ -22,10 +22,10 @@ V_MAX=""
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 TIME="24:00:00"
-# High-memory allocation: the largest cases peak at ~1.8 GB/worker (case2869
-# SOCP), so 56 workers can need ~100 GB.  256 GB leaves ~2.5x margin.  Confirm
-# the partition's per-node RAM is >= this before submitting.
-MEM="256G"
+# Measured steady-state footprint is ~0.5 GB/worker -> ~33 GB at 56 workers.
+# savio4_htc nodes have 257 GB (some 515 GB); requesting 256G would NOT fit the
+# 257 GB nodes, so we request 64 GB — ~2x margin and schedulable on any node.
+MEM="64G"
 CONDA_ENV="nn4opt"
 # ─────────────────────────────────────────────────────────────────────────────
 

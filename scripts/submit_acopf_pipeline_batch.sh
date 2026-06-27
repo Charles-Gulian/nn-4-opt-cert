@@ -4,7 +4,7 @@
 
 SCRIPT="scripts/generate_acopf_data_parallel.py"
 CONDA_ENV="nn4opt"
-N_WORKERS=56          # CPUs per node
+N_WORKERS=56          # CPUs per node (savio4_htc nodes have 56)
 N_TRAIN=10000
 N_TEST=5000
 SEED=11
@@ -12,10 +12,21 @@ CHECKPOINT_EVERY=500
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 TIME="24:00:00"
-# High-memory allocation: the largest cases peak at ~1.8 GB/worker (case2869
-# SOCP), so 56 workers can need ~100 GB.  256 GB leaves ~2.5x margin.  Confirm
-# the partition's per-node RAM is >= this before submitting.
-MEM="256G"
+# Measured steady-state footprint is ~0.5 GB/worker -> ~33 GB at 56 workers.
+# savio4_htc nodes have 257 GB (some 515 GB); requesting 256G would NOT fit the
+# 257 GB nodes, so we request 64 GB — ~2x margin and schedulable on any node.
+MEM="64G"
+
+# Dry-run mode: `DRY_RUN=1 bash scripts/submit_acopf_pipeline_batch.sh` submits
+# every config with just 5 train / 5 test samples and a short wall clock, to
+# validate the full pipeline on SAVIO before the real run.
+if [ "${DRY_RUN:-0}" = "1" ]; then
+  N_TRAIN=5
+  N_TEST=5
+  CHECKPOINT_EVERY=2
+  TIME="00:30:00"
+  echo "*** DRY RUN: ${N_TRAIN} train / ${N_TEST} test, time=${TIME} ***"
+fi
 
 # Cases to run, and which relaxations each gets.  case2869pegase is SOCP-only:
 # the chordal SDP is intractable at that size (see project notes), and SOCP is
