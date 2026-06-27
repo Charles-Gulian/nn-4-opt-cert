@@ -41,6 +41,22 @@ Solver notes
   bring down a multi-day run.
 """
 
+import os
+
+# Pin each process to a single thread BEFORE numpy/cvxpy import.  We run one
+# worker per allocated core, so every layer that would otherwise grab all cores
+# per process must be capped to 1, or 56 workers x 56 threads = ~3000 threads
+# thrash 56 cores and the large cases slow by ~50x.  Two layers matter:
+#   - numpy/scipy canonicalization -> OpenBLAS/MKL (OMP_/OPENBLAS_/MKL_/...).
+#   - the CLARABEL solve itself is Rust and uses a rayon thread pool, which the
+#     BLAS vars do NOT control -> RAYON_NUM_THREADS.
+# setdefault lets an explicit env export still win.  Under 'spawn' each worker
+# re-imports this module, so this runs (before that worker's numpy import) in
+# every process.
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "RAYON_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import argparse
 import multiprocessing as mp
 import pathlib

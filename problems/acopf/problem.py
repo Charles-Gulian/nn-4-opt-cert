@@ -856,9 +856,15 @@ def solve_relaxation(p, args=None):
     # tens of GB (OOM-killed on case1354pegase).  Setting ignore_dpp=True treats
     # the parameters as plain constants and re-canonicalizes each solve: a tiny,
     # sparse cone program (case1354pegase: ~0.8 GB, ~26 s, vs >128 GB OOM under
-    # DPP).  SOCP has no PSD cones, so DPP is cheap there and we keep it (caching
-    # gives fast warm re-solves), so ignore_dpp is only needed for sdp/chordal_sdp.
-    _ignore_dpp = relaxation in ("sdp", "chordal_sdp")
+    # DPP).  SOCP has no PSD cones, so DPP is normally cheap and worth keeping
+    # (caching gives ~0.1 s warm re-solves).  But on the very largest networks the
+    # DPP canonicalization becomes disproportionately expensive (case2869pegase
+    # SOCP: 28.6 s DPP canon + 1.6 GB vs 0.6 s + 0.8 GB with ignore_dpp), so above
+    # a bus-count threshold we drop DPP for SOCP too — re-canon is then as cheap as
+    # a DPP re-solve, with lower memory.
+    _LARGE_BUS_THRESHOLD = 2000
+    _ignore_dpp = (relaxation in ("sdp", "chordal_sdp")
+                   or nd.n_buses >= _LARGE_BUS_THRESHOLD)
 
     def _solve(prob, solver):
         prob.solve(solver=solver, verbose=False, ignore_dpp=_ignore_dpp,

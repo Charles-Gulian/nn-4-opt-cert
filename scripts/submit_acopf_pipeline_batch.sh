@@ -80,6 +80,12 @@ echo "CPUs allocated: \${SLURM_CPUS_PER_TASK}"
 source "\$(conda info --base)/etc/profile.d/conda.sh"
 conda activate ${CONDA_ENV}
 
+# One thread per worker process — we run one worker per core, so every threaded
+# layer must be capped to 1 to avoid ~56x56 oversubscription.  BLAS/OpenMP covers
+# numpy/scipy canonicalization; RAYON covers CLARABEL's Rust solver thread pool.
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+
 python $SCRIPT \\
     --case ${CASE} \\
     --relaxation ${RELAX} \\
