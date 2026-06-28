@@ -5,9 +5,9 @@
 SCRIPT="scripts/generate_acopf_data_parallel.py"
 CONDA_ENV="nn4opt"
 N_WORKERS=56          # CPUs per node (savio4_htc nodes have 56)
-N_TRAIN=10000
+N_TRAIN=20000
 N_TEST=5000
-SEED=11
+SEED=343
 CHECKPOINT_EVERY=500
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"

@@ -8,9 +8,9 @@
 CASE="case14"          # case9 | case14 | case39 | case89pegase | case118 | case300 | case1354pegase
 RELAX="socp"           # socp  | chordal_sdp | sdp
 
-N_TRAIN=10000
+N_TRAIN=20000
 N_TEST=5000
-SEED=11
+SEED=343
 N_WORKERS=56
 CHECKPOINT_EVERY=500
 

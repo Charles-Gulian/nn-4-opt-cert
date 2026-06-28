@@ -168,13 +168,57 @@ def _generate_or_load_x(case_name, n, seed, split, args_base, force):
 
 
 def _count_completed(csv_path):
-    """Return number of rows already written to csv_path (0 if file absent)."""
+    """Number of data rows currently in csv_path (0 if absent).
+
+    Line-based (not pd.read_csv) so it never raises on a malformed file — used
+    only for progress/summary display.  Resume decisions use
+    _validate_and_repair, which also heals corruption.
+    """
     if not csv_path.exists():
         return 0
-    try:
-        return len(pd.read_csv(csv_path))
-    except Exception:
+    with open(csv_path) as fh:
+        n_lines = sum(1 for _ in fh)
+    return max(0, n_lines - 1)   # minus the header row
+
+
+def _validate_and_repair(csv_path):
+    """Return the number of trustworthy completed rows, repairing the file.
+
+    Results are written in sample order (Pool.imap is ordered), so the longest
+    well-formed *leading* run of data rows corresponds to samples 0..count-1.
+    A line that repeats the header (from a prior bad append), has the wrong
+    field count, or is truncated marks where the data stops being trustworthy;
+    everything from there on is dropped and the file is rewritten to exactly
+    `header + valid rows`.
+
+    This makes re-running a job idempotent and safe:
+      - a clean, complete file  -> count == n_total, the job is skipped;
+      - a timed-out partial file -> resumes from the validated count;
+      - an append-corrupted file (duplicate header / doubled batch) -> self-heals
+        to its valid leading rows instead of compounding the corruption.
+    """
+    if not csv_path.exists():
         return 0
+    with open(csv_path) as fh:
+        lines = fh.read().splitlines()
+    if not lines:
+        return 0
+    header = lines[0]
+    ncols = header.count(",") + 1
+    valid = []
+    for ln in lines[1:]:
+        if ln == header or ln.count(",") + 1 != ncols:
+            break                      # embedded header / wrong width / truncated
+        valid.append(ln)
+    dropped = (len(lines) - 1) - len(valid)
+    if dropped:                        # only rewrite when we actually changed something
+        with open(csv_path, "w") as fh:
+            fh.write(header + "\n")
+            if valid:
+                fh.write("\n".join(valid) + "\n")
+        print(f"  {csv_path.name}: repaired — kept {len(valid)} valid leading "
+              f"row(s), dropped {dropped} suspect line(s).", flush=True)
+    return len(valid)
 
 
 def _label_parallel_checkpointed(
@@ -185,11 +229,12 @@ def _label_parallel_checkpointed(
 ):
     """Label X in checkpoint batches, appending each batch to csv_path.
 
-    On startup, counts how many rows are already in csv_path and skips them,
-    so re-running after a timeout resumes from where it left off.
+    On startup, validates/repairs csv_path and skips the rows already completed,
+    so re-running after a timeout (or accidental re-submission) resumes cleanly
+    from where it left off without duplicating or corrupting data.
     """
     n_total    = len(X)
-    n_done     = _count_completed(csv_path)
+    n_done     = _validate_and_repair(csv_path)
     n_remaining = n_total - n_done
 
     if n_remaining <= 0:
@@ -214,7 +259,13 @@ def _label_parallel_checkpointed(
         initargs=(case_name, relaxation, v_min, v_max),
     ) as pool:
         chunksize = max(1, len(tasks) // (n_workers * 8))
-        result_iter = pool.imap_unordered(_label_one, tasks, chunksize=chunksize)
+        # Ordered imap (not imap_unordered): results come back in task order, so
+        # row k of the CSV is sample k.  This is what makes count-based resume
+        # correct — otherwise the "first n_done rows" would be a random subset of
+        # indices and resuming by range(n_done, n_total) would duplicate some
+        # samples and skip others.  Workers still run fully in parallel; only the
+        # delivery order is fixed, which costs nothing for our uniform solves.
+        result_iter = pool.imap(_label_one, tasks, chunksize=chunksize)
 
         # Accumulate into a batch; flush every checkpoint_every results.
         batch = []
