@@ -139,3 +139,65 @@ def save_model(model, save_path):
 
 def load_model(model, save_path):
     model.load_state_dict(torch.load(save_path, weights_only=True))
+
+
+# ── self-contained checkpoints (weights + normalization + architecture) ───────
+# A plain state_dict isn't enough to run inference here: the model is trained on
+# standardized inputs/target, so the scalers must travel with the weights.  These
+# helpers bundle everything needed to reload and predict in a separate session.
+
+def save_checkpoint(save_path, model, x_mean, x_std, y_mean, y_std,
+                    input_dim, hidden_dims, feat_cols, extra=None):
+    """Save weights + standardization scalers + architecture in one file."""
+    ckpt = {
+        "state_dict": model.state_dict(),
+        "x_mean": np.asarray(x_mean, dtype=np.float64),
+        "x_std":  np.asarray(x_std,  dtype=np.float64),
+        "y_mean": float(y_mean),
+        "y_std":  float(y_std),
+        "input_dim": int(input_dim),
+        "hidden_dims": list(hidden_dims),
+        "feat_cols": list(feat_cols),
+    }
+    if extra:
+        ckpt.update(extra)
+    torch.save(ckpt, save_path)
+
+
+def load_checkpoint(save_path):
+    """Reload a checkpoint saved by save_checkpoint.
+
+    Returns (model, scalers, meta) where scalers is a dict with keys
+    x_mean/x_std/y_mean/y_std and meta carries input_dim/hidden_dims/feat_cols
+    (plus any extra fields).  The model is in eval mode and ready for
+    predict_denorm.
+    """
+    # Local import to avoid a circular dependency at module import time.
+    from nn.models import DNN
+
+    ckpt = torch.load(save_path, weights_only=False)
+    model = DNN(input_dim=ckpt["input_dim"], hidden_dims=ckpt["hidden_dims"])
+    model.load_state_dict(ckpt["state_dict"])
+    model.eval()
+
+    scalers = {
+        "x_mean": np.asarray(ckpt["x_mean"], dtype=np.float64),
+        "x_std":  np.asarray(ckpt["x_std"],  dtype=np.float64),
+        "y_mean": float(ckpt["y_mean"]),
+        "y_std":  float(ckpt["y_std"]),
+    }
+    meta = {k: ckpt[k] for k in ckpt
+            if k not in ("state_dict", "x_mean", "x_std", "y_mean", "y_std")}
+    return model, scalers, meta
+
+
+def predict_denorm(model, X_raw, scalers):
+    """Predict on raw (unstandardized) inputs, returning raw-scale outputs.
+
+    Standardizes X with the stored input scalers, runs the model, then maps the
+    standardized prediction back to physical units with the target scalers.
+    """
+    X_raw = np.asarray(X_raw, dtype=np.float64)
+    X_std = (X_raw - scalers["x_mean"]) / scalers["x_std"]
+    y_std = predict(model, X_std.astype(np.float32))
+    return y_std * scalers["y_std"] + scalers["y_mean"]
