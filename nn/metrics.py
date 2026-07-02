@@ -73,6 +73,122 @@ def error_summary(y_true, y_pred, confidence=0.95):
     )
 
 
+def conformal_offset(residuals, level):
+    """One-sided split-conformal offset from OVER-prediction residuals.
+
+    residuals = g - v (NN prediction minus relaxation value) on a calibration set.
+    Returns t = the exact finite-sample order statistic giving
+        Pr(g(theta) - v(theta) <= t) >= level
+    for a fresh exchangeable draw, namely the ceil((n+1)*level)-th smallest residual
+    (1-indexed, clamped to n). This is NOT np.quantile's interpolated value -- the
+    order statistic is what carries the marginal coverage guarantee exactly. Mirrors
+    problems/robust_knapsack/conformal.py:compute_margin (there parameterized by
+    tau = 1 - level).
+    """
+    e = np.asarray(residuals, dtype=float).reshape(-1)
+    e = e[np.isfinite(e)]
+    n = len(e)
+    if n == 0:
+        return float("nan")
+    e_sorted = np.sort(e)
+    k = int(np.ceil((n + 1) * level))
+    k = min(k, n)
+    return float(e_sorted[k - 1])
+
+
+def prediction_error_summary(pred, target, percentiles=(1, 5, 10, 90, 95, 99)):
+    """Distributional summary of the NN's relaxation-value prediction error.
+
+    Works on the SIGNED error e = pred - target (target = relaxation value v, the
+    quantity the NN is trained to predict). The sign matters for certification --
+    over-prediction (e > 0) is the direction that can inflate the conformal lower
+    bound -- so we report signed percentiles rather than absolute ones.
+
+    Returns MAPE (mean absolute percentage error, in %), the requested signed-error
+    percentiles, and the signed min/max. NaN-safe: non-finite rows and (for MAPE)
+    zero targets are dropped.
+    """
+    pred = np.asarray(pred, dtype=float).reshape(-1)
+    target = np.asarray(target, dtype=float).reshape(-1)
+    ok = np.isfinite(pred) & np.isfinite(target)
+    if not ok.any():
+        out = dict(n=0, mape=float("nan"),
+                   min_error=float("nan"), max_error=float("nan"))
+        out.update({f"p{q}": float("nan") for q in percentiles})
+        return out
+
+    e = pred[ok] - target[ok]                      # signed error
+    nz = target[ok] != 0
+    mape = float(np.mean(np.abs(e[nz] / target[ok][nz])) * 100.0) if nz.any() else float("nan")
+
+    out = dict(
+        n=int(ok.sum()),
+        mape=mape,
+        min_error=float(e.min()),
+        max_error=float(e.max()),
+    )
+    for q in percentiles:
+        out[f"p{q}"] = float(np.percentile(e, q))
+    return out
+
+
+def certification_confusion(relax_value, local_value, nn_pred, offset, delta):
+    """Confusion matrix for the conformal optimality certificate.
+
+    For each instance we hold three numbers (minimization sense):
+      relax_value v -- convex relaxation, a LOWER bound on the true optimum,
+      local_value f -- local solver, a feasible UPPER bound,
+      nn_pred     g -- NN's prediction of v.
+
+    `offset` is a split-conformal offset t such that Pr(g - v <= t) >= level, so
+    LB = g - t is a probabilistic LOWER bound on v (hence on the true optimum).
+
+    Certificate (relative-gap form): certify the local solution delta-optimal iff
+        f <= (g - t) * (1 + delta),
+    i.e. its relative gap to the certified lower bound LB is at most delta. This is
+    the safe direction: since LB <= v <= v*, f <= LB(1+delta) implies the true
+    relative gap is also <= delta.
+
+    Ground-truth event (what we score against): the solution really is delta-optimal
+    iff its relative gap to the relaxation value is at most delta,
+        (f - v) / v <= delta.
+
+    A "positive" = certified. Returns counts + the four rates:
+      TPR = TP/(TP+FN)  correctly certified among truly delta-optimal
+      FPR = FP/(FP+TN)  falsely certified among not-delta-optimal (the risk the
+                        conformal level is meant to bound -- should track ~1-level)
+      TNR = TN/(TN+FP)
+      FNR = FN/(FN+TP)
+    NaN-safe: non-finite rows and non-positive relax_value (bad denominator) dropped.
+    """
+    v = np.asarray(relax_value, dtype=float).reshape(-1)
+    f = np.asarray(local_value, dtype=float).reshape(-1)
+    g = np.asarray(nn_pred, dtype=float).reshape(-1)
+    t = float(offset)
+
+    ok = np.isfinite(v) & np.isfinite(f) & np.isfinite(g) & (v > 0)
+    v, f, g = v[ok], f[ok], g[ok]
+
+    lb = g - t
+    certified = f <= lb * (1.0 + delta)
+    truth = (f - v) / v <= delta
+
+    tp = int(np.sum(certified & truth))
+    tn = int(np.sum(~certified & ~truth))
+    fp = int(np.sum(certified & ~truth))
+    fn = int(np.sum(~certified & truth))
+
+    n_pos = tp + fn   # truly delta-optimal
+    n_neg = tn + fp   # truly not delta-optimal
+    return dict(
+        tp=tp, tn=tn, fp=fp, fn=fn, n=tp + tn + fp + fn,
+        tpr=tp / n_pos if n_pos > 0 else float("nan"),
+        fpr=fp / n_neg if n_neg > 0 else float("nan"),
+        tnr=tn / n_neg if n_neg > 0 else float("nan"),
+        fnr=fn / n_pos if n_pos > 0 else float("nan"),
+    )
+
+
 def optimality_confusion_matrix(relax_value, local_value, nn_pred, tol=1e-2,
                                 relative=False):
     """Confusion matrix for using the NN to certify optimality of a local solver.
