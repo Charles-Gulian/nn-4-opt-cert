@@ -137,6 +137,19 @@ def _ik_spec(order, n_train=20_000, n_test=5_000):
     )
 
 
+def _acopf_data_dir():
+    """AC-OPF data lives under a different directory name depending on where
+    we are: SAVIO writes it to data/acopf/ (see generate_acopf_data_parallel.py
+    / submit_acopf_train.sh), while the local laptop pull-back convention is
+    data/acopf-hpc/ (see scripts/train_acopf.py's DEFAULT_DATA_DIR). Prefer
+    whichever actually contains the data so this registry works unmodified in
+    both places instead of hardcoding one location.
+    """
+    on_savio = PROJECT_ROOT / "data" / "acopf"
+    on_laptop = PROJECT_ROOT / "data" / "acopf-hpc"
+    return on_savio if on_savio.exists() else on_laptop
+
+
 def _acopf_spec(case, relax, n_train=20_000, n_test=5_000):
     """Reuse-only entry: AC-OPF data + fold checkpoints already exist on SAVIO.
 
@@ -144,12 +157,13 @@ def _acopf_spec(case, relax, n_train=20_000, n_test=5_000):
     case), so feature_cols is left empty here.
     """
     key = f"acopf_{relax}_{case}"
+    data_dir = _acopf_data_dir()
     return ProblemSpec(
         key=key,
         feature_cols=[],   # inferred from CSV header (all cols minus LABEL_COLS)
         can_generate=False,
-        train_csv=PROJECT_ROOT / "data" / "acopf-hpc" / f"train_{n_train}_{relax}_{case}.csv",
-        test_csv=PROJECT_ROOT / "data" / "acopf-hpc" / f"test_{n_test}_{relax}_{case}.csv",
+        train_csv=data_dir / f"train_{n_train}_{relax}_{case}.csv",
+        test_csv=data_dir / f"test_{n_test}_{relax}_{case}.csv",
         models_dir=PROJECT_ROOT / "models" / "acopf",
         ckpt_pattern=f"dnn_{relax}_{case}_n{n_train}_fold{{fold}}.pt",
         results_dir=PROJECT_ROOT / "results" / "acopf-cert" / key,
