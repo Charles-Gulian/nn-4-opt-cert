@@ -489,29 +489,38 @@ def _build_socp_problem(nd: NetworkData):
     #   Q_k += G[k,m]*s_e - B[k,m]*c_e   (from-bus)
     #   P_m += G[m,k]*c_e - B[m,k]*s_e   (to-bus,  s_mk = -s_km)
     #   Q_m +=-G[m,k]*s_e - B[m,k]*c_e   (to-bus)
+    # From- and to-bus admittances must be read separately: for phase-shifting
+    # transformers the Ybus is asymmetric (Y[k,m] != Y[m,k]), so reusing the
+    # from-bus entry for the to-bus injection silently solves a *different*
+    # network than the local solver, breaking the lower-bound property (the
+    # relaxation value can exceed the true optimum).  Ordinary lines and
+    # magnitude-only tap transformers have Y[m,k] == Y[k,m], so Gto/Bto reduce
+    # to Gfr/Bfr and this is a no-op for every phase-shifter-free case.
     Gfr = np.real(nd.Y[fr, to])   # G[k,m] for each branch  (nb,)
-    Bfr = np.imag(nd.Y[fr, to])  # B[k,m] for each branch  (nb,)
+    Bfr = np.imag(nd.Y[fr, to])   # B[k,m] for each branch  (nb,)
+    Gto = np.real(nd.Y[to, fr])   # G[m,k] for each branch  (nb,)
+    Bto = np.imag(nd.Y[to, fr])   # B[m,k] for each branch  (nb,)
     erange = np.arange(nb)
 
     rows_f = fr;  rows_t = to   # from-bus and to-bus row indices
 
     A_Pc = sp.csr_matrix(
-        (np.concatenate([ Gfr,  Gfr]),
+        (np.concatenate([ Gfr,  Gto]),
          (np.concatenate([rows_f, rows_t]), np.concatenate([erange, erange]))),
         shape=(n, nb), dtype=float)
 
     A_Ps = sp.csr_matrix(
-        (np.concatenate([ Bfr, -Bfr]),
+        (np.concatenate([ Bfr, -Bto]),
          (np.concatenate([rows_f, rows_t]), np.concatenate([erange, erange]))),
         shape=(n, nb), dtype=float)
 
     A_Qc = sp.csr_matrix(
-        (np.concatenate([-Bfr, -Bfr]),
+        (np.concatenate([-Bfr, -Bto]),
          (np.concatenate([rows_f, rows_t]), np.concatenate([erange, erange]))),
         shape=(n, nb), dtype=float)
 
     A_Qs = sp.csr_matrix(
-        (np.concatenate([ Gfr, -Gfr]),
+        (np.concatenate([ Gfr, -Gto]),
          (np.concatenate([rows_f, rows_t]), np.concatenate([erange, erange]))),
         shape=(n, nb), dtype=float)
 
