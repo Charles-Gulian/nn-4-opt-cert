@@ -33,7 +33,8 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from nn.models import DNN
-from nn.training import train_model, train_model_two_phase, to_loader, save_checkpoint
+from nn.training import (train_model, train_model_two_phase, to_loader,
+                         save_checkpoint, load_checkpoint)
 from problems.registry import get_spec, LABEL_COLS, SMALL_PROBLEM_KEYS
 
 
@@ -87,6 +88,18 @@ def train_config(spec, args):
     t0 = time.time()
     for fold, (tr_idx, val_idx) in enumerate(kf.split(Xs)):
         tf = time.time()
+        ckpt_path = spec.models_dir / spec.ckpt_pattern.format(fold=fold)
+        # Idempotent resume: if this fold's checkpoint already exists and loads
+        # cleanly, skip it. The KFold split is deterministic (fixed random_state),
+        # so a resubmit after a wall-clock timeout reproduces the same splits and
+        # only re-trains the folds that never finished. --force retrains all.
+        if ckpt_path.exists() and not args.force:
+            try:
+                load_checkpoint(ckpt_path)
+                print(f"  fold {fold+1}/{args.folds} -> {ckpt_path.name}  (exists, skipped)", flush=True)
+                continue
+            except Exception:
+                print(f"  fold {fold+1}/{args.folds} -> {ckpt_path.name}  (exists but unreadable, retraining)", flush=True)
         model = DNN(input_dim=input_dim, hidden_dims=args.hidden_dims)
         if args.two_phase:
             model, _, _ = train_model_two_phase(
@@ -108,7 +121,6 @@ def train_config(spec, args):
                 model, tl, vl, n_epochs=args.epochs, learning_rate=args.lr,
                 weight_decay=args.weight_decay, verbose=False,
             )
-        ckpt_path = spec.models_dir / spec.ckpt_pattern.format(fold=fold)
         save_checkpoint(
             ckpt_path, model, x_mean, x_std, y_mean, y_std,
             input_dim, args.hidden_dims, feat_cols,
@@ -144,6 +156,10 @@ def main():
     p.add_argument("--weight-decay", type=float, default=1e-4)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--force", action="store_true",
+                   help="Retrain all folds even if their checkpoints already exist "
+                        "(default: skip existing/loadable fold checkpoints, so a "
+                        "resubmit after a timeout resumes instead of restarting).")
     args = p.parse_args()
 
     spec = get_spec(args.key, n_train=args.n_train, n_test=args.n_test)

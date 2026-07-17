@@ -23,7 +23,8 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from nn.models import DNN
-from nn.training import train_model, to_loader, train_model_two_phase, save_checkpoint
+from nn.training import (train_model, to_loader, train_model_two_phase,
+                         save_checkpoint, load_checkpoint)
 
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data"   / "robust_knapsack"
 MODELS_DIR       = PROJECT_ROOT / "models" / "robust_knapsack"
@@ -59,6 +60,10 @@ def main():
     p.add_argument("--weight-decay", type=float, default=1e-4)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--force", action="store_true",
+                   help="Retrain all folds even if their checkpoints already exist "
+                        "(default: skip existing/loadable fold checkpoints so a "
+                        "resubmit after a timeout resumes instead of restarting).")
     args = p.parse_args()
 
     csv_path = _train_csv(args.data_dir, args.n_train)
@@ -96,6 +101,17 @@ def main():
     t0 = time.time()
     for fold, (tr_idx, val_idx) in enumerate(kf.split(Xs)):
         tf = time.time()
+        path = _ckpt_path(args.n_train, fold)
+        # Idempotent resume: skip folds whose checkpoint already exists and loads
+        # cleanly, so a resubmit after a wall-clock timeout continues instead of
+        # restarting. KFold is deterministic (fixed seed), so splits reproduce.
+        if path.exists() and not args.force:
+            try:
+                load_checkpoint(path)
+                print(f"  fold {fold+1}/{args.folds} -> {path.name}  (exists, skipped)", flush=True)
+                continue
+            except Exception:
+                print(f"  fold {fold+1}/{args.folds} -> {path.name}  (exists but unreadable, retraining)", flush=True)
         model = DNN(input_dim=input_dim, hidden_dims=args.hidden_dims)
         if args.two_phase:
             model, _, _ = train_model_two_phase(
@@ -113,7 +129,6 @@ def main():
                 model, tl, vl, n_epochs=args.epochs, learning_rate=args.lr,
                 weight_decay=args.weight_decay, verbose=False,
             )
-        path = _ckpt_path(args.n_train, fold)
         save_checkpoint(
             path, model, x_mean, x_std, y_mean, y_std,
             input_dim, args.hidden_dims, feat_cols,
