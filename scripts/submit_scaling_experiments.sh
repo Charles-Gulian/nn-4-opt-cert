@@ -14,6 +14,10 @@
 # residuals by n_train directly.
 #
 # Run from the project root on a login node:  bash scripts/submit_scaling_experiments.sh
+# Pass one or more keys as args to submit only a subset, e.g. to resubmit just
+# the knapsack job after fixing an environment issue:
+#   bash scripts/submit_scaling_experiments.sh knapsack
+# (matches the JOBS "key" field below; "mimo" would submit both mimo rows)
 #
 # COMPUTE NOTES: we keep the EXACT standard training recipe (train_*.py defaults:
 # 1000 epochs, batch 256, deep 6x256) at every size -- no recipe changes to
@@ -37,8 +41,23 @@ JOBS=(
   "knapsack  640000  96G  24:00:00"
 )
 
+# Optional filter: only submit rows whose key (e.g. "mimo", "knapsack") or
+# "key:n_train" (e.g. "mimo:640000") matches one of the given args.
+FILTERS=("$@")
+
 for spec in "${JOBS[@]}"; do
   read -r KEY N MEM TIME <<< "$spec"
+  if [ ${#FILTERS[@]} -gt 0 ]; then
+    MATCH=0
+    for f in "${FILTERS[@]}"; do
+      if [ "$f" = "${KEY}" ] || [ "$f" = "${KEY}:${N}" ]; then
+        MATCH=1
+      fi
+    done
+    if [ "$MATCH" -eq 0 ]; then
+      continue
+    fi
+  fi
   JOB="scale_${KEY}_n${N}"
   sbatch <<EOF
 #!/bin/bash
