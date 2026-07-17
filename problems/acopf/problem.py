@@ -55,8 +55,23 @@ from problems.acopf.network import NetworkData, load_network, DEFAULT_CASE
 
 # ── local solver ──────────────────────────────────────────────────────────────
 
-def solve_local(p, args=None):
+def solve_local(p, args=None, weak=False, weak_seed=None, weak_mode="lowv",
+                weak_max_iter=None):
     """Solve AC-OPF via Pyomo + IPOPT (polar form).
+
+    weak : bool
+        If True, deliberately produce a feasible-but-suboptimal solution (for
+        demonstrating certification of sub-optimal heuristic solutions). Two
+        levers combine: (i) a poor initial point that biases IPOPT toward a
+        different basin -- flat voltage magnitudes with bus angles randomized
+        over ~U(-0.25, 0.25) rad instead of the pandapower power-flow warm start
+        -- and (ii) IPOPT options that keep feasibility tight (constr_viol_tol
+        1e-8) but stop short of tight local optimality (loosened compl_inf_tol /
+        dual_inf_tol and a low max_iter). weak_seed makes the angle perturbation
+        reproducible per instance. The returned dict includes 'max_constr_viol'
+        so callers can confirm the point is genuinely AC-feasible.
+    weak_seed : int or None
+        Seed for the reproducible angle perturbation used when weak=True.
 
     IPOPT handles ill-conditioned Y-bus matrices (e.g. PEGASE cases with
     extreme transformer impedances) far better than pandapower's PIPS solver.
@@ -121,24 +136,42 @@ def solve_local(p, args=None):
 
     Vm_init = np.ones(n)
     Va_init = np.zeros(n)
-    try:
-        net_pf = args.get("net")
-        if net_pf is None:
-            import pandapower.networks as pn
-            net_pf = getattr(pn, args.get("case_name", DEFAULT_CASE))()
-        net_pf = copy.deepcopy(net_pf)
-        net_pf.load["p_mw"]   = Pd   # Pd/Qd are already in MW/MVar
-        net_pf.load["q_mvar"] = Qd
-        pp.runpp(net_pf, numba=False, verbose=False)
-        if net_pf.converged:
-            # Map pandapower bus IDs → 0-based nd row indices
-            bid2idx = {int(b): i for i, b in enumerate(nd.bus_ids)}
-            for bus_id, idx in bid2idx.items():
-                row = net_pf.res_bus.loc[bus_id]
-                Vm_init[idx] = float(row["vm_pu"])
-                Va_init[idx] = float(np.radians(row["va_degree"]))
-    except Exception:
-        pass  # fall back to flat start if power flow fails
+    if weak and weak_mode in ("lowv", "angle"):
+        # Deliberately poor seed to bias IPOPT toward a different (worse) basin.
+        # Skip the pandapower warm start entirely.
+        rng = np.random.default_rng(weak_seed)
+        if weak_mode == "lowv":
+            # Depressed voltage magnitudes (low-voltage branch of the power-flow
+            # equations) with mildly perturbed angles -- a higher-loss operating
+            # region, so IPOPT tends to settle in a costlier local optimum.
+            Vm_init = np.clip(0.65 + 0.05 * rng.standard_normal(n),
+                              nd.v_min, nd.v_max)
+            Va_init = rng.uniform(-0.15, 0.15, size=n)
+        else:  # "angle": flat magnitudes, strongly randomized angles
+            Va_init = rng.uniform(-0.25, 0.25, size=n)
+    else:
+        # Non-weak, or weak_mode == "earlystop": use the pandapower power-flow
+        # warm start (feasible). For earlystop, IPOPT is capped to few iterations
+        # below, so it reaches AC-feasibility fast but stops before the cost is
+        # fully minimized -- feasible-but-suboptimal.
+        try:
+            net_pf = args.get("net")
+            if net_pf is None:
+                import pandapower.networks as pn
+                net_pf = getattr(pn, args.get("case_name", DEFAULT_CASE))()
+            net_pf = copy.deepcopy(net_pf)
+            net_pf.load["p_mw"]   = Pd   # Pd/Qd are already in MW/MVar
+            net_pf.load["q_mvar"] = Qd
+            pp.runpp(net_pf, numba=False, verbose=False)
+            if net_pf.converged:
+                # Map pandapower bus IDs → 0-based nd row indices
+                bid2idx = {int(b): i for i, b in enumerate(nd.bus_ids)}
+                for bus_id, idx in bid2idx.items():
+                    row = net_pf.res_bus.loc[bus_id]
+                    Vm_init[idx] = float(row["vm_pu"])
+                    Va_init[idx] = float(np.radians(row["va_degree"]))
+        except Exception:
+            pass  # fall back to flat start if power flow fails
 
     m.Vm = pyo.Var(m.buses, bounds=lambda _, k: (nd.v_min[k], nd.v_max[k]),
                    initialize=lambda _, k: float(Vm_init[k]))
@@ -209,28 +242,72 @@ def solve_local(p, args=None):
         or "ipopt"
     )
     solver = pyo.SolverFactory("ipopt", executable=_ipopt_bin)
-    solver.options["max_iter"]           = 1000
-    solver.options["tol"]               = 1e-6
     solver.options["print_level"]       = 0   # silent
     solver.options["mu_strategy"]       = "adaptive"
     # Gradient-based scaling handles the ~10^4 spread in Y-bus entries.
     solver.options["nlp_scaling_method"] = "gradient-based"
-    # Accept a slightly looser solution rather than failing outright.
-    # For our use case (1e-3 cost accuracy) this is more than tight enough.
-    solver.options["acceptable_tol"]    = 1e-4
-    solver.options["acceptable_iter"]   = 5
+    if weak:
+        # Keep feasibility genuinely tight, but stop short of tight optimality:
+        # loosen the complementarity / dual-infeasibility tolerances and cap the
+        # iteration count so IPOPT exits at an early, AC-feasible operating point
+        # before the KKT conditions are driven to full stationarity.
+        solver.options["constr_viol_tol"] = 1e-8
+        solver.options["compl_inf_tol"]   = 1e-4
+        solver.options["dual_inf_tol"]    = 1e-2
+        # Enough iterations to reach AC-feasibility from the poor seed, but the
+        # loosened optimality tolerances + acceptable criteria let IPOPT exit at
+        # an early feasible point (and the poor seed biases it toward a worse
+        # local optimum). We accept the returned point on feasibility, not on
+        # IPOPT's own status label (see below).
+        _default_iter = 20 if weak_mode == "earlystop" else 100
+        solver.options["max_iter"]        = weak_max_iter or _default_iter
+        solver.options["acceptable_iter"] = 3
+        solver.options["acceptable_tol"]  = 1e-2
+        solver.options["acceptable_constr_viol_tol"] = 1e-8
+    else:
+        solver.options["max_iter"]           = 1000
+        solver.options["tol"]               = 1e-6
+        # Accept a slightly looser solution rather than failing outright.
+        # For our use case (1e-3 cost accuracy) this is more than tight enough.
+        solver.options["acceptable_tol"]    = 1e-4
+        solver.options["acceptable_iter"]   = 5
 
     res = solver.solve(m, tee=False)
 
-    ok = (res.solver.status == pyo.SolverStatus.ok and
-          res.solver.termination_condition in (
-              pyo.TerminationCondition.optimal,
-              pyo.TerminationCondition.locallyOptimal,
-              pyo.TerminationCondition.feasible,   # IPOPT "acceptable" solution
-          ))
+    # Max power-balance constraint violation (per-unit) of the returned iterate.
+    # Pyomo keeps the constant load term on the bound, so the violation is
+    # |body - bound|, not |body|.
+    def _max_constr_viol():
+        mv = 0.0
+        for con in (m.p_bal, m.q_bal):
+            for k in range(n):
+                c = con[k]
+                b = pyo.value(c.body)
+                lo = pyo.value(c.lower) if c.lower is not None else b
+                up = pyo.value(c.upper) if c.upper is not None else b
+                mv = max(mv, lo - b, b - up)
+        return float(mv)
 
-    if not ok:
-        return np.nan, {"success": False}
+    if weak:
+        # Accept the iterate purely on genuine AC-feasibility, regardless of
+        # IPOPT's status label (it typically exits via 'acceptable' or maxIter at
+        # a feasible-but-suboptimal point). Reject only if constraints are truly
+        # violated (i.e. a falsely-'converged' infeasible point).
+        try:
+            max_viol = _max_constr_viol()
+        except Exception:
+            return np.nan, {"success": False}
+        if not np.isfinite(max_viol) or max_viol > 1e-6:
+            return np.nan, {"success": False, "max_constr_viol": max_viol}
+    else:
+        ok = (res.solver.status == pyo.SolverStatus.ok and
+              res.solver.termination_condition in (
+                  pyo.TerminationCondition.optimal,
+                  pyo.TerminationCondition.locallyOptimal,
+                  pyo.TerminationCondition.feasible,   # IPOPT "acceptable" solution
+              ))
+        if not ok:
+            return np.nan, {"success": False}
 
     # Recover cost in $/hr (objective is already in $/hr since c0/c1/c2 are)
     cost = float(pyo.value(m.obj))
@@ -247,6 +324,7 @@ def solve_local(p, args=None):
         "qg_mvar": qg_mvar,
         "vm_pu":   vm_pu,
         "va_deg":  va_deg,
+        "max_constr_viol": _max_constr_viol(),
     }
 
 

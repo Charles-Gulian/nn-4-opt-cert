@@ -241,3 +241,63 @@ def optimality_confusion_matrix(relax_value, local_value, nn_pred, tol=1e-2,
         fpr=fp / n_neg if n_neg > 0 else float("nan"),
         fnr=fn / n_pos if n_pos > 0 else float("nan"),
     )
+
+
+def roc_auc_certification(local_value, nn_pred, true_value, delta0):
+    """ROC curve + AUC for the NN certification classifier.
+
+    The certificate rule ``f - g < tau`` (with tau = delta - q_alpha) is a binary
+    classifier whose decision score is the NN-predicted optimality gap
+
+        s = f(x_hat; theta) - g(theta),   g = v_hat(theta)   (lower s => more optimal)
+
+    swept over the threshold tau. Rather than fix a single (delta, alpha) we
+    report the whole ROC and its AUC. The ground-truth positive class is "the
+    local solution really is (delta0-)optimal", measured against the exact or
+    best-available optimum ``true_value`` v(theta):
+
+        y = 1  iff  f(x_hat; theta) - v(theta) <= delta0.
+
+    Parameters
+    ----------
+    local_value : array   f, the local/heuristic solver cost (upper bound).
+    nn_pred     : array   g = v_hat, the NN's value prediction.
+    true_value  : array   v(theta), exact/best-available optimum (ground truth).
+    delta0      : float   absolute tolerance defining the positive (optimal) class.
+
+    Returns
+    -------
+    dict with:
+      auc            AUC (P a truly-optimal instance is scored more optimal than a
+                     truly-suboptimal one); nan if only one class is present.
+      fpr, tpr       ROC arrays.
+      tau            threshold on s = f - g corresponding to each (fpr, tpr) point,
+                     so a chosen operating point maps back to tau = delta - q_alpha.
+      n_pos, n_neg   class sizes; n total scored (finite, dropped otherwise).
+    NaN-safe: non-finite rows in any of f/g/v are dropped.
+    """
+    from sklearn.metrics import roc_curve, roc_auc_score
+
+    f = np.asarray(local_value, dtype=float).reshape(-1)
+    g = np.asarray(nn_pred, dtype=float).reshape(-1)
+    vt = np.asarray(true_value, dtype=float).reshape(-1)
+
+    ok = np.isfinite(f) & np.isfinite(g) & np.isfinite(vt)
+    f, g, vt = f[ok], g[ok], vt[ok]
+
+    s = f - g                       # predicted optimality gap (decision score)
+    y = (f - vt <= delta0).astype(int)   # 1 = truly (delta0-)optimal
+
+    n_pos = int(y.sum())
+    n_neg = int((1 - y).sum())
+    if n_pos == 0 or n_neg == 0:
+        return dict(auc=float("nan"), fpr=np.array([]), tpr=np.array([]),
+                    tau=np.array([]), n_pos=n_pos, n_neg=n_neg, n=len(y))
+
+    # Higher score => more likely positive (optimal); s is lower for optimal,
+    # so rank by -s. roc_curve thresholds are on the score -s; tau on s is -thr.
+    score = -s
+    fpr, tpr, thr = roc_curve(y, score)
+    auc = roc_auc_score(y, score)
+    return dict(auc=float(auc), fpr=fpr, tpr=tpr, tau=-thr,
+                n_pos=n_pos, n_neg=n_neg, n=len(y))
