@@ -50,14 +50,35 @@ def _init_worker(solver_opts):
                      "solver_opts": solver_opts or {}}
 
 
-def _solve_one(item):
-    """Run in a worker process. Returns (idx, val, error_or_None)."""
+def _is_too_many_sessions(exc):
+    """WLS license error 10030 ('Too many sessions ...'). This is transient --
+    lingering sessions from prior runs expire server-side after a few minutes --
+    so it's worth retrying rather than aborting. Any OTHER error is a real
+    failure and must propagate."""
+    s = repr(exc)
+    return "10030" in s or "Too many sessions" in s
+
+
+def _solve_one(item, max_retries=6, base_backoff=15.0):
+    """Run in a worker process. Returns (idx, val, error_or_None).
+
+    A worker's Gurobi session is created on its first solve and reused
+    thereafter, so a 'too many sessions' error effectively only occurs at
+    worker startup (a phantom session from a prior run hasn't expired yet). We
+    retry that specific error with a long backoff -- WLS sessions expire on the
+    order of minutes, so backoff grows 15s, 30s, 60s, ... Non-10030 errors
+    return immediately so the parent aborts loudly (the original silent-NaN
+    failure mode we are guarding against)."""
     idx, x_row = item
-    try:
-        val, _ = solve_exact(x_row, args=_WORKER_ARGS)
-        return idx, val, None
-    except Exception as e:
-        return idx, np.nan, repr(e)
+    for attempt in range(max_retries + 1):
+        try:
+            val, _ = solve_exact(x_row, args=_WORKER_ARGS)
+            return idx, val, None
+        except Exception as e:
+            if _is_too_many_sessions(e) and attempt < max_retries:
+                time.sleep(base_backoff * (2 ** attempt))
+                continue
+            return idx, np.nan, repr(e)
 
 
 def _x_path(n, seed, split):

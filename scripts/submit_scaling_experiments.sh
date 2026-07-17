@@ -24,19 +24,27 @@
 # explain. Training is CPU-only; at 640k this is ~8-9h for the 4 folds (the net
 # is small, ~3 ms/step), which fits inside the 24h wall. MIMO SDP generation
 # parallelizes over N_WORKERS (<1h). Knapsack Gurobi generation was assumed
-# ~39ms/solve but measured ~150ms/solve on SAVIO's academic WLS license
-# (per-solve license-check overhead) -- serial would take ~26h at 640k,
-# missing the 24h wall. generate_knapsack_data.py now supports --n-workers to
-# parallelize across processes (each with its own Gurobi Env); it aborts
-# loudly instead of writing NaN if a worker hits a license-concurrency error.
-# Confirm the safe worker count with scripts/probe_gurobi_concurrency.py
-# before raising KNAPSACK_WORKERS further.
+# ~39ms/solve but measured ~150ms/solve on SAVIO's academic WLS license --
+# serial would take ~26h at 640k, missing the 24h wall. It now supports
+# --n-workers to parallelize across processes (each with its own Gurobi Env).
+#
+# LICENSE NOTE: the academic WLS license (id 2819194) has a session BASELINE of
+# 2 but BURSTS to ~5 concurrent sessions. The apparent "throttle" we first saw
+# is a ONE-TIME per-worker session-acquisition cost (tens of seconds while
+# bursting), NOT a per-solve slowdown: once a worker holds its session it
+# reuses it and solves at full ~0.15s speed (confirmed by probe_gurobi_
+# concurrency.py's first-solve-vs-steady-state split, and consistent with the
+# multi-zonal-elcc job that ran many workers on cvxpy+Gurobi). So we can
+# parallelize; KNAPSACK_WORKERS=4 stays under the ~5 burst ceiling with
+# headroom. At 4-way, 640k ~= 6.7h, comfortably inside the 24h wall alongside
+# the ~9h train step. The generator retries GurobiError 10030 with backoff (for
+# the startup scramble) and otherwise aborts loudly rather than writing NaN.
 
 CONDA_ENV="nn4opt"
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 N_WORKERS=32
-KNAPSACK_WORKERS=8
+KNAPSACK_WORKERS=4   # under the ~5-session burst ceiling (see LICENSE NOTE above)
 CPUS=32
 FOLDS=4
 mkdir -p logs

@@ -42,33 +42,48 @@ def _worker(worker_id, n_solves, seed_base, out_queue):
         args = {"prob": prob, "x": x, "t": t, "mu_param": mu_param,
                 "sigma2_param": sigma2_param, "sigma_param": sigma_param}
 
+        # Time the FIRST solve separately: the Gurobi session is acquired lazily
+        # on the first solve, so under license-burst contention this call eats
+        # the one-time session-acquisition cost. Subsequent solves reuse the
+        # session and should run at full speed -- this split is exactly what
+        # distinguishes "one-time startup throttle" from "per-solve throttle".
         values = []
-        t_solve0 = time.time()
-        for i in range(n_solves):
+        t_first0 = time.time()
+        val, info = solve_exact(X[0], args=args)
+        t_first = time.time() - t_first0
+        values.append((val, info["status"]))
+
+        t_rest0 = time.time()
+        for i in range(1, n_solves):
             val, info = solve_exact(X[i], args=args)
             values.append((val, info["status"]))
-        t_solve = time.time() - t_solve0
+        n_rest = max(n_solves - 1, 0)
+        t_rest = time.time() - t_rest0
+        steady_per_solve = (t_rest / n_rest) if n_rest > 0 else float("nan")
 
         n_ok = sum(1 for v, s in values if s == "optimal")
         out_queue.put({
             "worker_id": worker_id, "ok": True, "n_ok": n_ok, "n_total": n_solves,
-            "env_setup_s": t_env, "solve_s": t_solve,
+            "env_setup_s": t_env, "first_solve_s": t_first,
+            "steady_per_solve_s": steady_per_solve, "solve_s": t_first + t_rest,
             "wall_s": time.time() - t_start, "error": None,
         })
     except Exception as e:
         out_queue.put({
             "worker_id": worker_id, "ok": False, "n_ok": 0, "n_total": n_solves,
-            "env_setup_s": None, "solve_s": None,
+            "env_setup_s": None, "first_solve_s": None,
+            "steady_per_solve_s": None, "solve_s": None,
             "wall_s": time.time() - t_start, "error": repr(e),
         })
 
 
 def main():
     p = argparse.ArgumentParser(description="Probe Gurobi license concurrency.")
-    p.add_argument("--workers", type=int, default=8,
+    p.add_argument("--workers", type=int, default=4,
                     help="Number of concurrent processes, each acquiring its own Gurobi env.")
-    p.add_argument("--solves", type=int, default=5,
-                    help="Number of solves each worker performs.")
+    p.add_argument("--solves", type=int, default=30,
+                    help="Solves per worker. Use enough (>=20) to amortize the one-time "
+                         "session-acquisition cost and reveal steady-state per-solve time.")
     p.add_argument("--seed-base", type=int, default=90000,
                     help="Seed offset so workers sample distinct instances.")
     args = p.parse_args()
@@ -89,29 +104,53 @@ def main():
     total_wall = time.time() - t0
 
     results.sort(key=lambda r: r["worker_id"])
-    print(f"\n{'worker':>6} {'ok':>5} {'solved':>8} {'env_s':>8} {'solve_s':>8} {'wall_s':>8}  error", flush=True)
+    print(f"\n{'worker':>6} {'ok':>5} {'solved':>8} {'first_s':>8} {'steady/solve':>13} "
+          f"{'wall_s':>8}  error", flush=True)
     for r in results:
-        env_s = f"{r['env_setup_s']:.2f}" if r["env_setup_s"] is not None else "-"
-        solve_s = f"{r['solve_s']:.2f}" if r["solve_s"] is not None else "-"
+        first_s = f"{r['first_solve_s']:.2f}" if r.get("first_solve_s") is not None else "-"
+        steady = (f"{r['steady_per_solve_s']:.3f}"
+                  if r.get("steady_per_solve_s") is not None else "-")
         print(f"{r['worker_id']:>6} {str(r['ok']):>5} {r['n_ok']}/{r['n_total']:<6} "
-              f"{env_s:>8} {solve_s:>8} {r['wall_s']:>8.2f}  {r['error'] or ''}", flush=True)
+              f"{first_s:>8} {steady:>13} {r['wall_s']:>8.2f}  {r['error'] or ''}", flush=True)
 
     n_workers_ok = sum(1 for r in results if r["ok"] and r["n_ok"] == r["n_total"])
+    ok_results = [r for r in results if r["ok"] and r.get("steady_per_solve_s") is not None]
     print(f"\n{n_workers_ok}/{args.workers} workers fully succeeded. "
           f"Total wall time: {total_wall:.1f}s.", flush=True)
 
+    if ok_results:
+        import statistics
+        steady_vals = [r["steady_per_solve_s"] for r in ok_results]
+        first_vals = [r["first_solve_s"] for r in ok_results]
+        mean_steady = statistics.mean(steady_vals)
+        max_first = max(first_vals)
+        print(f"  Among succeeders: max first-solve (session acquisition) = "
+              f"{max_first:.1f}s; mean STEADY-STATE per-solve = {mean_steady:.3f}s.",
+              flush=True)
+        # Steady-state near the serial ~0.15s means the throttle is a one-time
+        # per-worker startup cost, not per-solve -- safe to parallelize.
+        if mean_steady < 1.0:
+            eff = mean_steady / max(n_workers_ok, 1)
+            print(f"  => Steady-state solves run at full speed. The startup cost is "
+                  f"paid ONCE per worker and is negligible over a long run. "
+                  f"Effective throughput at {n_workers_ok} workers ~= "
+                  f"{eff:.3f}s/row; 640k rows ~= {640000*eff/3600:.1f}h.", flush=True)
+        else:
+            print("  => Steady-state per-solve is still elevated (>1s) -- parallelism "
+                  "is genuinely throttled here, not just at startup. Reconsider "
+                  "worker count or fall back to serial.", flush=True)
+
     if n_workers_ok == args.workers:
-        print("All concurrent workers succeeded -- the license appears to support "
-              f"at least {args.workers}-way concurrency. Safe to parallelize "
-              "knapsack generation at this worker count (try higher to find the cap "
-              "if you want more throughput).", flush=True)
+        print(f"All {args.workers} workers succeeded -- safe at this count. "
+              "Increase --workers to find the burst ceiling if you want more.", flush=True)
     elif n_workers_ok == 0:
-        print("No workers succeeded concurrently -- this license likely allows only "
-              "1 concurrent Gurobi session. Keep knapsack generation serial.", flush=True)
+        print("No workers succeeded concurrently -- try fewer, or wait for lingering "
+              "sessions to expire (check the license dashboard 'Active sessions').",
+              flush=True)
     else:
-        print(f"Partial success ({n_workers_ok}/{args.workers}) -- the license caps "
-              f"concurrency somewhere below {args.workers}. Re-run with fewer "
-              "--workers to find the real limit before parallelizing generation.",
+        print(f"Partial success ({n_workers_ok}/{args.workers}) -- burst ceiling is "
+              f"around {n_workers_ok} concurrent sessions on this license. Set "
+              f"KNAPSACK_WORKERS at or below {n_workers_ok} (with headroom).",
               flush=True)
 
 
