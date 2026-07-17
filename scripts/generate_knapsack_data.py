@@ -204,11 +204,19 @@ def main():
                    help="Parallel worker processes for Gurobi solves (each with its "
                         "own Env). Confirm the license supports this many concurrent "
                         "sessions first via scripts/probe_gurobi_concurrency.py.")
+    p.add_argument("--threads", type=int, default=None,
+                   help="Gurobi Threads per solve. CRITICAL when --n-workers > 1: set "
+                        "so n_workers * threads <= allocated cores, else concurrent B&B "
+                        "solves oversubscribe cores and each solve slows ~90x.")
     args = p.parse_args()
 
     seed_train, seed_test = args.seed, args.seed + 1
     feat_cols = _col_names()
-    solver_opts = {"TimeLimit": args.time_limit} if args.time_limit else {}
+    solver_opts = {}
+    if args.time_limit:
+        solver_opts["TimeLimit"] = args.time_limit
+    if args.threads:
+        solver_opts["Threads"] = args.threads
 
     for n, seed, split in [(args.n_train, seed_train, "train"),
                             (args.n_test, seed_test, "test")]:

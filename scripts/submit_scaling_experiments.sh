@@ -28,22 +28,23 @@
 # serial would take ~26h at 640k, missing the 24h wall. It now supports
 # --n-workers to parallelize across processes (each with its own Gurobi Env).
 #
-# LICENSE CAP: the academic WLS license (id 2819194, "TemporaryAcademic") has a
-# session BASELINE of 2. Running ABOVE baseline throttles EVERY solve ~90x
-# (measured: 0.15s -> ~14s/solve at 4 concurrent workers, steady-state -- NOT a
-# one-time startup cost). Only running at/below 2 sessions avoids the throttle.
-# So KNAPSACK_WORKERS must be <= 2. At a clean 2-way (if unthrottled at
-# baseline), 640k ~= 13h. Because that plus the ~9h train step is tight against
-# the 24h wall, the knapsack pipeline SPLITS generation into its own job and
-# runs train+calibrate as a dependent job (see below). Confirm 2-way runs at
-# ~0.15s/solve with scripts/probe_gurobi_concurrency.py --workers 2 (after the
-# license dashboard shows 0 active sessions) before relying on it.
+# KNAPSACK PARALLELISM: the bottleneck was CPU oversubscription, NOT the Gurobi
+# license. Each knapsack instance is a MISOCP solved by branch-and-bound, which
+# defaults to Threads=0 (all cores). Running K workers each with all-core B&B on
+# a shared core pool caused ~90x per-solve slowdown (0.15s -> 14s). The fix is
+# to cap Gurobi Threads per worker so KNAPSACK_WORKERS * KNAPSACK_THREADS <=
+# CPUS (no oversubscription). Measured: 8 workers all succeed with no session
+# errors (the earlier "~5 ceiling" was phantom sessions from rapid probing, not
+# a real cap), ~0.13-0.19s/solve, effective ~0.016s/row => 640k ~= 3h. The
+# generator still retries GurobiError 10030 with backoff and aborts loudly
+# rather than writing NaN.
 
 CONDA_ENV="nn4opt"
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 N_WORKERS=32
-KNAPSACK_WORKERS=2   # baseline ceiling -- above this every solve throttles ~90x
+KNAPSACK_WORKERS=8    # 8 concurrent Gurobi sessions (verified OK, no 10030 errors)
+KNAPSACK_THREADS=4    # 8 * 4 = 32 = CPUS -> no core oversubscription
 CPUS=32
 FOLDS=4
 mkdir -p logs
@@ -93,9 +94,9 @@ export PATH="\$(conda info --base)/envs/${CONDA_ENV}/bin:\$PATH"
 
 if [ "${KEY}" = "knapsack" ]; then
     # ---- Robust knapsack: dedicated pipeline (Gurobi gen, parallel+checkpointed) ----
-    echo "[1/3] generating data (Gurobi, ${KNAPSACK_WORKERS} workers, resumable)"
+    echo "[1/3] generating data (Gurobi, ${KNAPSACK_WORKERS} workers x ${KNAPSACK_THREADS} threads, resumable)"
     python scripts/generate_knapsack_data.py --n-train ${N} --n-test 20000 \\
-        --n-workers ${KNAPSACK_WORKERS}
+        --n-workers ${KNAPSACK_WORKERS} --threads ${KNAPSACK_THREADS}
 
     export OMP_NUM_THREADS=${CPUS} OPENBLAS_NUM_THREADS=${CPUS} MKL_NUM_THREADS=${CPUS}
     echo "[2/3] training 4-fold deep nets (standard recipe)"
