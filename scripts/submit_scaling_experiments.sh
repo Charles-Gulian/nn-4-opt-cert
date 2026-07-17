@@ -23,13 +23,20 @@
 # 1000 epochs, batch 256, deep 6x256) at every size -- no recipe changes to
 # explain. Training is CPU-only; at 640k this is ~8-9h for the 4 folds (the net
 # is small, ~3 ms/step), which fits inside the 24h wall. MIMO SDP generation
-# parallelizes over N_WORKERS (<1h); knapsack Gurobi generation is serial
-# (~39 ms/solve ⇒ ~7h for 640k) but checkpointed/resumable.
+# parallelizes over N_WORKERS (<1h). Knapsack Gurobi generation was assumed
+# ~39ms/solve but measured ~150ms/solve on SAVIO's academic WLS license
+# (per-solve license-check overhead) -- serial would take ~26h at 640k,
+# missing the 24h wall. generate_knapsack_data.py now supports --n-workers to
+# parallelize across processes (each with its own Gurobi Env); it aborts
+# loudly instead of writing NaN if a worker hits a license-concurrency error.
+# Confirm the safe worker count with scripts/probe_gurobi_concurrency.py
+# before raising KNAPSACK_WORKERS further.
 
 CONDA_ENV="nn4opt"
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 N_WORKERS=32
+KNAPSACK_WORKERS=8
 CPUS=32
 FOLDS=4
 mkdir -p logs
@@ -78,9 +85,10 @@ conda activate ${CONDA_ENV}
 export PATH="\$(conda info --base)/envs/${CONDA_ENV}/bin:\$PATH"
 
 if [ "${KEY}" = "knapsack" ]; then
-    # ---- Robust knapsack: dedicated pipeline (Gurobi gen, serial+checkpointed) ----
-    echo "[1/3] generating data (Gurobi, serial, resumable)"
-    python scripts/generate_knapsack_data.py --n-train ${N} --n-test 20000
+    # ---- Robust knapsack: dedicated pipeline (Gurobi gen, parallel+checkpointed) ----
+    echo "[1/3] generating data (Gurobi, ${KNAPSACK_WORKERS} workers, resumable)"
+    python scripts/generate_knapsack_data.py --n-train ${N} --n-test 20000 \\
+        --n-workers ${KNAPSACK_WORKERS}
 
     export OMP_NUM_THREADS=${CPUS} OPENBLAS_NUM_THREADS=${CPUS} MKL_NUM_THREADS=${CPUS}
     echo "[2/3] training 4-fold deep nets (standard recipe)"

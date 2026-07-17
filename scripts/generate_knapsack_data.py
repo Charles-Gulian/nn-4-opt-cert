@@ -5,17 +5,23 @@ value of the MISOCP (solved exactly via Gurobi) -- see
 problems/robust_knapsack/problem.py. Unlike AC-OPF there is no relaxation/
 local split, so there is a single "Cost" column and no "Exact"/"LocalCost".
 
-Solves are fast (~30ms each), so this runs serially with periodic
-checkpointing (not a multiprocessing pool like the AC-OPF data-gen).
+Solves were assumed ~30-40ms each (a serial loop), but measured throughput on
+SAVIO under the academic WLS license was actually ~0.15s/solve (per-solve
+license-check network overhead), making 640k rows take >24h serially. Pass
+--n-workers > 1 to parallelize across processes (each with its own Gurobi
+Env); run scripts/probe_gurobi_concurrency.py first to confirm the license
+supports concurrent sessions.
 
 Usage:
     python scripts/generate_knapsack_data.py --n-train 20000 --n-test 5000
+    python scripts/generate_knapsack_data.py --n-train 640000 --n-test 20000 --n-workers 8
 """
 
 import argparse
 import pathlib
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pandas as pd
@@ -31,6 +37,27 @@ DATA_DIR = PROJECT_ROOT / "data" / "robust_knapsack"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 CHECKPOINT_EVERY = 500
+
+# Populated once per worker process by _init_worker; used by _solve_one.
+_WORKER_ARGS = None
+
+
+def _init_worker(solver_opts):
+    global _WORKER_ARGS
+    prob, x, t, mu_param, sigma2_param, sigma_param = _build_misocp()
+    _WORKER_ARGS = {"prob": prob, "x": x, "t": t, "mu_param": mu_param,
+                     "sigma2_param": sigma2_param, "sigma_param": sigma_param,
+                     "solver_opts": solver_opts or {}}
+
+
+def _solve_one(item):
+    """Run in a worker process. Returns (idx, val, error_or_None)."""
+    idx, x_row = item
+    try:
+        val, _ = solve_exact(x_row, args=_WORKER_ARGS)
+        return idx, val, None
+    except Exception as e:
+        return idx, np.nan, repr(e)
 
 
 def _x_path(n, seed, split):
@@ -49,7 +76,8 @@ def _count_completed(csv_path):
     return max(0, n_lines - 1)
 
 
-def _label_checkpointed(X, feat_cols, csv_path, checkpoint_every, desc, solver_opts=None):
+def _label_checkpointed(X, feat_cols, csv_path, checkpoint_every, desc, solver_opts=None,
+                         n_workers=1):
     n_total = len(X)
     n_done = _count_completed(csv_path)
     n_remaining = n_total - n_done
@@ -59,42 +87,79 @@ def _label_checkpointed(X, feat_cols, csv_path, checkpoint_every, desc, solver_o
     if n_done > 0:
         print(f"  {csv_path.name}: resuming from row {n_done} ({n_remaining} remaining).", flush=True)
 
-    prob, x, t, mu_param, sigma2_param, sigma_param = _build_misocp()
-    args = {"prob": prob, "x": x, "t": t, "mu_param": mu_param,
-            "sigma2_param": sigma2_param, "sigma_param": sigma_param,
-            "solver_opts": solver_opts or {}}
+    solver_opts = solver_opts or {}
 
-    write_header = (n_done == 0)
-    batch = []
-    t0 = time.time()
-    # Fail fast if the environment can't solve at all (e.g. Gurobi missing on a
-    # compute node): probe the first instance and raise the *real* exception
-    # instead of silently labelling every row NaN and wasting the whole run.
-    _probe_val, _ = solve_exact(X[n_done], args=args)
+    # Fail fast if the environment can't solve at all (e.g. Gurobi missing/
+    # unlicensed on a compute node): probe the first instance in this process
+    # (no forked workers yet) and raise the real exception rather than
+    # silently labelling every row NaN and wasting the whole run.
+    _probe_args = None
+    _probe_val, _ = solve_exact(X[n_done], args=_probe_args)
     if not np.isfinite(_probe_val):
         raise RuntimeError(
             f"First solve returned {_probe_val!r} (status not OPTIMAL). "
             "Aborting rather than generating all-NaN labels -- check that Gurobi "
             "is installed and licensed in this environment.")
+
+    write_header = (n_done == 0)
+    t0 = time.time()
     n_nan = 0
-    for i in tqdm(range(n_done, n_total), desc=desc, initial=0, total=n_remaining):
-        try:
-            val, _ = solve_exact(X[i], args=args)
-        except Exception:
-            val = np.nan
-        if not np.isfinite(val):
-            n_nan += 1
-        batch.append({**{col: X[i, j] for j, col in enumerate(feat_cols)}, "Cost": val})
+    n_saved = 0
 
-        if len(batch) >= checkpoint_every:
-            pd.DataFrame(batch).to_csv(csv_path, mode="a", header=write_header, index=False)
-            write_header = False
-            batch = []
-            print(f"  [checkpoint] {_count_completed(csv_path)}/{n_total} rows saved "
-                  f"({time.time()-t0:.0f}s elapsed)", flush=True)
-
-    if batch:
-        pd.DataFrame(batch).to_csv(csv_path, mode="a", header=write_header, index=False)
+    if n_workers <= 1:
+        prob, x, t, mu_param, sigma2_param, sigma_param = _build_misocp()
+        args = {"prob": prob, "x": x, "t": t, "mu_param": mu_param,
+                "sigma2_param": sigma2_param, "sigma_param": sigma_param,
+                "solver_opts": solver_opts}
+        pending = []
+        for i in tqdm(range(n_done, n_total), desc=desc, initial=0, total=n_remaining):
+            try:
+                val, _ = solve_exact(X[i], args=args)
+            except Exception:
+                val = np.nan
+            if not np.isfinite(val):
+                n_nan += 1
+            pending.append({**{col: X[i, j] for j, col in enumerate(feat_cols)}, "Cost": val})
+            if len(pending) >= checkpoint_every:
+                pd.DataFrame(pending).to_csv(csv_path, mode="a", header=write_header, index=False)
+                write_header = False
+                pending = []
+                print(f"  [checkpoint] {_count_completed(csv_path)}/{n_total} rows saved "
+                      f"({time.time()-t0:.0f}s elapsed)", flush=True)
+        if pending:
+            pd.DataFrame(pending).to_csv(csv_path, mode="a", header=write_header, index=False)
+    else:
+        # Parallel path: each worker process builds its own Gurobi Env/problem
+        # once (via _init_worker) and solves assigned indices independently.
+        # ProcessPoolExecutor.map preserves input order, so checkpointing logic
+        # below is unchanged from the serial path. If ANY worker raises (e.g. a
+        # license-concurrency conflict), abort immediately rather than silently
+        # writing NaN for that row -- that silent-failure mode is exactly what
+        # produced the original all-NaN dataset.
+        print(f"  Parallelizing across {n_workers} workers.", flush=True)
+        items = ((i, X[i]) for i in range(n_done, n_total))
+        pending = []
+        with ProcessPoolExecutor(max_workers=n_workers, initializer=_init_worker,
+                                  initargs=(solver_opts,)) as ex:
+            for idx, val, err in tqdm(ex.map(_solve_one, items, chunksize=4),
+                                       desc=desc, initial=0, total=n_remaining):
+                if err is not None:
+                    raise RuntimeError(
+                        f"Worker failed on row {idx}: {err}. Aborting rather than "
+                        "writing a NaN row for what may be a license-concurrency "
+                        "conflict -- rerun scripts/probe_gurobi_concurrency.py to "
+                        "check the safe worker count, or rerun with --n-workers 1.")
+                if not np.isfinite(val):
+                    n_nan += 1
+                pending.append({**{col: X[idx, j] for j, col in enumerate(feat_cols)}, "Cost": val})
+                if len(pending) >= checkpoint_every:
+                    pd.DataFrame(pending).to_csv(csv_path, mode="a", header=write_header, index=False)
+                    write_header = False
+                    pending = []
+                    print(f"  [checkpoint] {_count_completed(csv_path)}/{n_total} rows saved "
+                          f"({time.time()-t0:.0f}s elapsed)", flush=True)
+        if pending:
+            pd.DataFrame(pending).to_csv(csv_path, mode="a", header=write_header, index=False)
 
     n_written = _count_completed(csv_path)
     elapsed = time.time() - t0
@@ -114,6 +179,10 @@ def main():
     p.add_argument("--regen", action="store_true")
     p.add_argument("--time-limit", type=float, default=None,
                    help="Optional Gurobi TimeLimit (s) per solve, as a safety net.")
+    p.add_argument("--n-workers", type=int, default=1,
+                   help="Parallel worker processes for Gurobi solves (each with its "
+                        "own Env). Confirm the license supports this many concurrent "
+                        "sessions first via scripts/probe_gurobi_concurrency.py.")
     args = p.parse_args()
 
     seed_train, seed_test = args.seed, args.seed + 1
@@ -138,7 +207,7 @@ def main():
 
         _label_checkpointed(X, feat_cols, csv_path, args.checkpoint_every,
                              desc=f"{split.capitalize()} [robust knapsack]",
-                             solver_opts=solver_opts)
+                             solver_opts=solver_opts, n_workers=args.n_workers)
 
 
 if __name__ == "__main__":
