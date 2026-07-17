@@ -28,7 +28,7 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
-def _worker(worker_id, n_solves, seed_base, out_queue):
+def _worker(worker_id, n_solves, seed_base, out_queue, threads=None):
     t_start = time.time()
     try:
         from problems.robust_knapsack.problem import _build_misocp, solve_exact
@@ -39,8 +39,13 @@ def _worker(worker_id, n_solves, seed_base, out_queue):
         t_env = time.time() - t_env0
 
         X = sample_parameters(n_solves, args={"seed": seed_base + worker_id})
+        # Cap Gurobi threads per worker so K concurrent B&B solves don't
+        # oversubscribe the node's cores (the prime suspect for the per-solve
+        # slowdown -- MISOCP branch-and-bound defaults to Threads=0 = all cores).
+        solver_opts = {"Threads": threads} if threads else {}
         args = {"prob": prob, "x": x, "t": t, "mu_param": mu_param,
-                "sigma2_param": sigma2_param, "sigma_param": sigma_param}
+                "sigma2_param": sigma2_param, "sigma_param": sigma_param,
+                "solver_opts": solver_opts}
 
         # Time the FIRST solve separately: the Gurobi session is acquired lazily
         # on the first solve, so under license-burst contention this call eats
@@ -86,15 +91,19 @@ def main():
                          "session-acquisition cost and reveal steady-state per-solve time.")
     p.add_argument("--seed-base", type=int, default=90000,
                     help="Seed offset so workers sample distinct instances.")
+    p.add_argument("--threads", type=int, default=None,
+                    help="Gurobi Threads per worker (default: unset = all cores). Set to "
+                         "~floor(allocated_cores / workers) to avoid CPU oversubscription.")
     args = p.parse_args()
 
-    print(f"Launching {args.workers} concurrent workers, {args.solves} solves each ...", flush=True)
+    tinfo = f", {args.threads} Gurobi threads each" if args.threads else ", default (all-core) threads"
+    print(f"Launching {args.workers} concurrent workers, {args.solves} solves each{tinfo} ...", flush=True)
     ctx = mp.get_context("spawn")
     q = ctx.Queue()
     procs = []
     t0 = time.time()
     for wid in range(args.workers):
-        proc = ctx.Process(target=_worker, args=(wid, args.solves, args.seed_base, q))
+        proc = ctx.Process(target=_worker, args=(wid, args.solves, args.seed_base, q, args.threads))
         proc.start()
         procs.append(proc)
 

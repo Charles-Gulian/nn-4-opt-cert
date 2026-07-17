@@ -28,23 +28,22 @@
 # serial would take ~26h at 640k, missing the 24h wall. It now supports
 # --n-workers to parallelize across processes (each with its own Gurobi Env).
 #
-# LICENSE NOTE: the academic WLS license (id 2819194) has a session BASELINE of
-# 2 but BURSTS to ~5 concurrent sessions. The apparent "throttle" we first saw
-# is a ONE-TIME per-worker session-acquisition cost (tens of seconds while
-# bursting), NOT a per-solve slowdown: once a worker holds its session it
-# reuses it and solves at full ~0.15s speed (confirmed by probe_gurobi_
-# concurrency.py's first-solve-vs-steady-state split, and consistent with the
-# multi-zonal-elcc job that ran many workers on cvxpy+Gurobi). So we can
-# parallelize; KNAPSACK_WORKERS=4 stays under the ~5 burst ceiling with
-# headroom. At 4-way, 640k ~= 6.7h, comfortably inside the 24h wall alongside
-# the ~9h train step. The generator retries GurobiError 10030 with backoff (for
-# the startup scramble) and otherwise aborts loudly rather than writing NaN.
+# LICENSE CAP: the academic WLS license (id 2819194, "TemporaryAcademic") has a
+# session BASELINE of 2. Running ABOVE baseline throttles EVERY solve ~90x
+# (measured: 0.15s -> ~14s/solve at 4 concurrent workers, steady-state -- NOT a
+# one-time startup cost). Only running at/below 2 sessions avoids the throttle.
+# So KNAPSACK_WORKERS must be <= 2. At a clean 2-way (if unthrottled at
+# baseline), 640k ~= 13h. Because that plus the ~9h train step is tight against
+# the 24h wall, the knapsack pipeline SPLITS generation into its own job and
+# runs train+calibrate as a dependent job (see below). Confirm 2-way runs at
+# ~0.15s/solve with scripts/probe_gurobi_concurrency.py --workers 2 (after the
+# license dashboard shows 0 active sessions) before relying on it.
 
 CONDA_ENV="nn4opt"
 PARTITION="savio4_htc"
 ACCOUNT="fc_power"
 N_WORKERS=32
-KNAPSACK_WORKERS=4   # under the ~5-session burst ceiling (see LICENSE NOTE above)
+KNAPSACK_WORKERS=2   # baseline ceiling -- above this every solve throttles ~90x
 CPUS=32
 FOLDS=4
 mkdir -p logs
