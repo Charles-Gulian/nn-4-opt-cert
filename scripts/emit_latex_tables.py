@@ -71,7 +71,7 @@ def _body(df, cell_fns):
 
 def offline_table(df):
     fns = [lambda r: num(r["mean_v"]), lambda r: num(r["std_v"]),
-           lambda r: f"{r['pct_infeasible']:.1f}", lambda r: num(r["mean_relax_gap"]),
+           lambda r: num(r["mean_relax_gap"]),
            lambda r: num(r["mae"]), lambda r: num(r["q_offset"])]
     return rf"""\begin{{table}}[t]
 \centering\footnotesize
@@ -79,12 +79,12 @@ def offline_table(df):
 calibration), averaged over the four folds. ${{}}^\ast$If $v(\bm{{\theta}})$ is intractable we
 use the relaxation value $v_r(\bm{{\theta}})$ for the mean, std, and relaxation gap.}}
 \label{{tab:offline}}
-\begin{{tabular}}{{lll rrr r r r}}
+\begin{{tabular}}{{lll rr r r r}}
 \toprule
-& & & \multicolumn{{3}}{{c}}{{Data Generation}} & Convexification & Training & Calibration \\
-\cmidrule(lr){{4-6}}\cmidrule(lr){{7-7}}\cmidrule(lr){{8-8}}\cmidrule(lr){{9-9}}
+& & & \multicolumn{{2}}{{c}}{{Data Generation}} & Convexification & Training & Calibration \\
+\cmidrule(lr){{4-5}}\cmidrule(lr){{6-6}}\cmidrule(lr){{7-7}}\cmidrule(lr){{8-8}}
 \textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
-Mean $v^\ast$ & Std $v^\ast$ & \% Infeas. & Relax.\ Gap$^\ast$ & MAE & $q_{{{QL}}}$ \\
+Mean $v^\ast$ & Std $v^\ast$ & Relax.\ Gap$^\ast$ & MAE & $q_{{{QL}}}$ \\
 \midrule
 {_body(df, fns)}
 \bottomrule
@@ -93,8 +93,7 @@ Mean $v^\ast$ & Std $v^\ast$ & \% Infeas. & Relax.\ Gap$^\ast$ & MAE & $q_{{{QL}
 
 
 def online_table(df):
-    fns = [lambda r: r["solver"],
-           lambda r: num(r["mean_opt_gap"]), lambda r: num(r["worst_opt_gap"]),
+    fns = [lambda r: num(r["mean_opt_gap"]), lambda r: num(r["worst_opt_gap"]),
            lambda r: f"{int(r['TP'])}", lambda r: f"{int(r['FP'])}",
            lambda r: f"{int(r['TN'])}", lambda r: f"{int(r['FN'])}"]
     return rf"""\begin{{table}}[t]
@@ -103,11 +102,11 @@ def online_table(df):
 $\alpha = {APCT}$ (offset $q_{{{QL}}}$), averaged over the four folds. ${{}}^\ast$Optimality gap uses
 $v(\bm{{\theta}})$ where tractable, else $v_r(\bm{{\theta}})$.}}
 \label{{tab:online}}
-\begin{{tabular}}{{llll rr rrrr}}
+\begin{{tabular}}{{lll rr rrrr}}
 \toprule
-& & & & \multicolumn{{6}}{{c}}{{Deployment}} \\
-\cmidrule(lr){{5-10}}
-\textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} & \textbf{{Local Solver}} &
+& & & \multicolumn{{6}}{{c}}{{Deployment}} \\
+\cmidrule(lr){{4-9}}
+\textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
 Mean Gap$^\ast$ & Worst Gap$^\ast$ & TP & FP & TN & FN \\
 \midrule
 {_body(df, fns)}

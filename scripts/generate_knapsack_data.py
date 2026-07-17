@@ -67,11 +67,23 @@ def _label_checkpointed(X, feat_cols, csv_path, checkpoint_every, desc, solver_o
     write_header = (n_done == 0)
     batch = []
     t0 = time.time()
+    # Fail fast if the environment can't solve at all (e.g. Gurobi missing on a
+    # compute node): probe the first instance and raise the *real* exception
+    # instead of silently labelling every row NaN and wasting the whole run.
+    _probe_val, _ = solve_exact(X[n_done], args=args)
+    if not np.isfinite(_probe_val):
+        raise RuntimeError(
+            f"First solve returned {_probe_val!r} (status not OPTIMAL). "
+            "Aborting rather than generating all-NaN labels -- check that Gurobi "
+            "is installed and licensed in this environment.")
+    n_nan = 0
     for i in tqdm(range(n_done, n_total), desc=desc, initial=0, total=n_remaining):
         try:
             val, _ = solve_exact(X[i], args=args)
         except Exception:
             val = np.nan
+        if not np.isfinite(val):
+            n_nan += 1
         batch.append({**{col: X[i, j] for j, col in enumerate(feat_cols)}, "Cost": val})
 
         if len(batch) >= checkpoint_every:
@@ -88,6 +100,9 @@ def _label_checkpointed(X, feat_cols, csv_path, checkpoint_every, desc, solver_o
     elapsed = time.time() - t0
     print(f"  {csv_path.name}: {n_written}/{n_total} rows ({elapsed:.0f}s, "
           f"{elapsed/max(n_remaining,1):.3f}s/sample)", flush=True)
+    if n_nan:
+        print(f"  WARNING: {n_nan}/{n_remaining} solves returned NaN (non-OPTIMAL "
+              "status) -- these rows will be dropped downstream.", flush=True)
 
 
 def main():

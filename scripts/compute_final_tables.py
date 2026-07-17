@@ -41,17 +41,17 @@ SOLVER = {
 # (Experiment, Relaxation label, Case label, results-dir key, truth-kind)
 # truth-kind: 'self' (v=v_r), 'ik1','ik2','mimo', 'acopf_socp','acopf_chordal', 'knap'
 ROWS = [
-    ("QCQP", "Shor / Lasserre-1", "", "qcqp", "self"),
-    ("Inverse Kinematics", "Shor / Lasserre-1", "", "ik_lass1", "ik1"),
+    ("QCQP", "Shor", "", "qcqp", "self"),
+    ("Inverse Kinematics", "Shor", "", "ik_lass1", "ik1"),
     ("Inverse Kinematics", "Lasserre-2", "", "ik_lass2", "ik2"),
-    ("MIMO Detection", "Shor / Lasserre-1", "", "mimo", "mimo"),
+    ("MIMO Detection", "Shor", "", "mimo", "mimo"),
 ]
 for case in ACOPF_CASES:
-    ROWS.append(("AC-OPF", "SOCP / Jabr", case, f"acopf_socp_{case}", "acopf_socp"))
+    ROWS.append(("AC-OPF", "SOCP", case, f"acopf_socp_{case}", "acopf_socp"))
 for case in ACOPF_CASES:
     if case == "case2869pegase":
         continue  # no chordal SDP
-    ROWS.append(("AC-OPF", "SDP / Lavaei-Low", case, f"acopf_chordal_sdp_{case}", "acopf_chordal"))
+    ROWS.append(("AC-OPF", "SDP", case, f"acopf_chordal_sdp_{case}", "acopf_chordal"))
 ROWS.append(("Robust Knapsack", "None", "n=20000", "knapsack_n20000", "knap"))
 ROWS.append(("Robust Knapsack", "None", "n=80000", "knapsack_n80000", "knap"))
 
