@@ -36,6 +36,7 @@ DATA = PROJECT_ROOT / "data"
 SOLVER = {
     "QCQP": "IPM", "Inverse Kinematics": "IPM", "AC-OPF": "IPM",
     "MIMO Detection": "zero-forcing", "Robust Knapsack": "greedy",
+    "Robust Knapsack (corr.)": "greedy",
 }
 
 # (Experiment, Relaxation label, Case label, results-dir key, truth-kind)
@@ -54,6 +55,15 @@ for case in ACOPF_CASES:
     ROWS.append(("AC-OPF", "SDP", case, f"acopf_chordal_sdp_{case}", "acopf_chordal"))
 ROWS.append(("Robust Knapsack", "None", "n=20000", "knapsack_n20000", "knap"))
 ROWS.append(("Robust Knapsack", "None", "n=80000", "knapsack_n80000", "knap"))
+# Correlated-mu robust knapsack (n=25 items, mu ~ N(c, Sigma) with positive
+# correlation): the redesigned experiment. Two training targets -- the exact
+# MISOCP optimum and the continuous SOCP relaxation v_r -- at two data sizes,
+# from scripts/knapsack_corr_kfold.py.
+for _n in (20, 80):
+    ROWS.append(("Robust Knapsack (corr.)", "Exact", f"n={_n}000",
+                 f"knapsack_corr_exact_{_n}k", "knap_corr"))
+    ROWS.append(("Robust Knapsack (corr.)", "SOCP", f"n={_n}000",
+                 f"knapsack_corr_relax_{_n}k", "knap_corr"))
 
 
 def _pred_dir(key):
@@ -130,6 +140,53 @@ def _standard_row(exp, relax, case, key, kind, delta_frac, level):
     return off, onl
 
 
+def _knapsack_corr_row(exp, relax, case, key, kind, delta_frac, level):
+    """Correlated-mu robust knapsack (MAX-sense), 4-fold OOF, from
+    scripts/knapsack_corr_kfold.py outputs.
+
+    This is the only MAXIMIZATION problem in the suite, so the certificate signs
+    are flipped relative to the min problems: vhat + q is a (1-alpha) UPPER bound
+    on the target (q = the (1-alpha) quantile of the out-of-fold residual
+    target - prediction), and we certify iff  vhat + q - f <= delta, which
+    implies v* - f <= delta. For the SOCP-relaxation target the learned quantity
+    is v_r >= v*, so the same bound covers v* and the relaxation gap simply adds
+    to the effective slack.
+    """
+    d = pd.read_csv(RESULTS / key / "fold_test_predictions.csv")
+    oof = np.load(RESULTS / key / "oof_residuals.npy")
+    oof = oof[np.isfinite(oof)]
+    q = conformal_offset(oof, level)          # Pr(target <= vhat + q) >= level
+
+    folds = sorted(d["fold"].unique())
+    one = d[d["fold"] == folds[0]]
+    vstar = one["vstar"].values               # exact optimum (ground truth)
+    f_g = one["f"].values                     # greedy local-solver value
+    y = one["v"].values                       # the target the NN learned
+    delta = delta_frac * np.nanstd(vstar)
+
+    off = dict(experiment=exp, relaxation=relax, case=case,
+               mean_v=float(np.mean(vstar)), std_v=float(np.std(vstar)),
+               pct_infeasible=0.0,
+               mean_relax_gap=float(np.mean(y - vstar)),
+               mae=float(np.mean(np.abs(d["g"].values - d["v"].values))),
+               q_offset=float(q))
+
+    truth = (vstar - f_g) <= delta
+    tp = fp = tn = fn = 0.0
+    for k in folds:
+        g = d[d["fold"] == k]["g"].values
+        cert = (g + q - f_g) <= delta
+        tp += np.sum(cert & truth); fp += np.sum(cert & ~truth)
+        tn += np.sum(~cert & ~truth); fn += np.sum(~cert & truth)
+    nf = len(folds)
+    opt_gap = vstar - f_g
+    onl = dict(experiment=exp, relaxation=relax, case=case, solver=SOLVER[exp],
+               mean_opt_gap=float(opt_gap.mean()), worst_opt_gap=float(opt_gap.max()),
+               delta=delta, TP=round(tp/nf), FP=round(fp/nf),
+               TN=round(tn/nf), FN=round(fn/nf))
+    return off, onl
+
+
 def _knapsack_row(exp, relax, case, key, kind, delta_frac, level):
     n_train = 20000 if "20000" in case else 80000
     test_name = "test_5000" if n_train == 20000 else "test_20000"
@@ -197,7 +254,8 @@ def main():
 
     offline, online, timing = [], [], []
     for exp, relax, case, key, kind in ROWS:
-        row = _knapsack_row if kind == "knap" else _standard_row
+        row = {"knap": _knapsack_row,
+               "knap_corr": _knapsack_corr_row}.get(kind, _standard_row)
         try:
             off, onl = row(exp, relax, case, key, kind, args.delta_frac, level)
             offline.append(off); online.append(onl)

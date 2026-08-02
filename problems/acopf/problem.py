@@ -318,6 +318,16 @@ def solve_local(p, args=None, weak=False, weak_seed=None, weak_mode="lowv",
     vm_pu   = np.array([pyo.value(m.Vm[k])     for k in range(n)])
     va_deg  = np.array([np.degrees(pyo.value(m.Va[k])) for k in range(n)])
 
+    # IPOPT's OWN reported solve time (seconds), excluding Pyomo model
+    # construction, NL-file writing and subprocess launch. Used by
+    # scripts/measure_solve_times.py to compare against the conic solvers'
+    # internal time (cvxpy prob.solver_stats.solve_time) on an equal footing --
+    # solver work vs solver work. None when the solver did not report it.
+    try:
+        solver_time = float(res.solver.time)
+    except (AttributeError, TypeError, ValueError):
+        solver_time = None
+
     return cost, {
         "success": True,
         "pg_mw":   pg_mw,
@@ -325,6 +335,7 @@ def solve_local(p, args=None, weak=False, weak_seed=None, weak_mode="lowv",
         "vm_pu":   vm_pu,
         "va_deg":  va_deg,
         "max_constr_viol": _max_constr_viol(),
+        "solver_time_s": solver_time,
     }
 
 
