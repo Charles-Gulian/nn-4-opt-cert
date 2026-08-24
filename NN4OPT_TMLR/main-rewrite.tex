@@ -790,6 +790,7 @@ We convexify problem \cref{prob:MIMO}{}{} via semidefinite relaxation (i.e., the
 We fix a random channel matrix with $m = 4$, $n = 2$, sample transmitted signals $x \in \{-1, +1\}^n$ uniformly with noise variance $\sigma^2 = 0.1$, and obtain feasible solutions with a fast zero-forcing detector (a linear pseudo-inverse of $H$ followed by rounding). MIMO detection is among the hardest of our value functions to learn: because the parameter is the noisy received signal, $v(\bm{\theta})$ jumps as $\bm{\theta}$ crosses the maximum-likelihood decision boundaries between candidate signals, so the target is rough rather than smooth. The network's prediction error is consequently large relative to the small spread of the optimal value, which makes the certificate conservative for this problem and results in a high false negative rate. We return to this in Section~\ref{sec:discussion}.
 
 \subsection{Power Systems Optimization: AC Optimal Power Flow}
+\label{subsec:acopf-experiment}
 
 The alternating current optimal power flow (AC-OPF) problem is solved by grid operators approximtely every five minutes to schedule generation at minimum cost subject to the physics of the electrical network.
 It is a non-convex QCQP parameterized by the real and reactive load $\bm{\theta} = (\mathbf{p}_D, \mathbf{q}_D)$ at each bus.
@@ -1173,23 +1174,31 @@ Mean Gap$^\ast$ & Worst Gap$^\ast$ & TP & FP & TN & FN \\
 \centering\footnotesize
 \caption{Mean per-instance solve times: the convex relaxation (offline) vs.\ the fast
 local solver. Both columns of a given row are measured identically, so each row is a
-like-for-like comparison. For QCQP, inverse kinematics and MIMO detection we report the
-full wall-clock of each solve call. For AC-OPF, whose local solver (IPOPT) is invoked
-through a file-based (AMPL/NL) modelling interface, we report \emph{solver-internal} time
-on both sides---the conic solver's own reported solve time for the relaxation, and
-IPOPT's own reported solve time for the local solve (parsed from its internal timing
-log)---so that the comparison is not dominated by Python model construction, a
-power-flow warm start, or the NL-file read/write and process-launch overhead of the
-modelling interface, which together account for a further $2$--$7\times$ on the local
-side for the smallest systems (diluted to ${\sim}1.3\times$ on the largest). Mean over
-$50$ random test instances per case (smallest six cases) or $3$--$8$ instances for
-\texttt{case1354pegase}/\texttt{case2869pegase}, whose chordal-SDP relaxation solve is
-tens of seconds per instance; instances on which either solver failed to converge are
-excluded from both columns (up to $26\%$ of draws for the chordal SDP on the largest
-cases, itself indicative of that relaxation's numerical difficulty there). Within a
-relaxation family, cost grows with problem size, and the chordal SDP is far more
-expensive than the SOCP, especially at scale; the SOCP-vs.-local gap does not show a
-comparably clean scaling trend and should not be over-read from this sample size.}
+like-for-like comparison; the local solver does not depend on which relaxation it is
+being compared against, so its solve time is measured ONCE per experiment (per AC-OPF
+case; once for inverse kinematics) and reused across every relaxation row of that
+experiment, rather than re-measured independently per row. For QCQP, inverse kinematics
+and MIMO detection we report the full wall-clock of each solve call. For AC-OPF, whose
+local solver (IPOPT) is invoked through a file-based (AMPL/NL) modelling interface, we
+report \emph{solver-internal} time on both sides---the conic solver's own reported solve
+time for the relaxation, and IPOPT's own reported solve time for the local solve (parsed
+from its internal timing log)---so that the comparison is not dominated by Python model
+construction, a power-flow warm start, or the NL-file read/write and process-launch
+overhead of the modelling interface, which together account for a further $2$--$7\times$
+on the local side for the smallest systems (diluted to ${\sim}1.3\times$ on the largest).
+Mean over $50$ random test instances per case (smallest six AC-OPF cases) or $3$--$8$
+instances for \texttt{case1354pegase}/\texttt{case2869pegase}'s SOCP and
+\texttt{case1354pegase}'s chordal SDP, whose solve is tens of seconds per instance;
+instances on which either solver failed to converge are excluded from both columns (up to
+$26\%$ of draws for the chordal SDP on the largest cases, itself indicative of that
+relaxation's numerical difficulty there). \textsuperscript{$\dagger$}For
+\texttt{case2869pegase}'s chordal SDP, only $1$ of $5$ attempted instances converged
+(each attempt costing $\sim\!70$s regardless of outcome); we report that single solve
+time rather than assert a stable average, consistent with treating this relaxation as
+effectively intractable at scale (\S\ref{subsec:acopf-experiment}). Within a relaxation family,
+cost grows with problem size, and the chordal SDP is far more expensive than the SOCP,
+especially at scale; the SOCP-vs.-local gap does not show a comparably clean scaling
+trend and should not be over-read from this sample size.}
 \label{tab:timing}
 \begin{tabular}{lll rr}
 \toprule
@@ -1198,27 +1207,27 @@ Relaxation Solve & Local Solve \\
 \midrule
   \multirow{1}{*}{QCQP} & Shor &  & 96.1 ms & 94.7 ms \\
 \midrule
-  \multirow{2}{*}{Inverse Kinematics} & Shor &  & 160 ms & 148 ms \\
-   & Lasserre-2 &  & 665 ms & 194 ms \\
+  \multirow{2}{*}{Inverse Kinematics} & Shor &  & 0.36 ms & 12.4 ms \\
+   & Lasserre-2 &  & 34.5 ms & 12.4 ms \\
 \midrule
   \multirow{1}{*}{MIMO Detection} & Shor &  & 92.8 ms & 0.141 ms \\
 \midrule
-  \multirow{16}{*}{AC-OPF} & SOCP & \texttt{case9} & 0.80 ms & 2.90 ms \\
-   & SOCP & \texttt{case14} & 0.60 ms & 2.60 ms \\
-   & SOCP & \texttt{case39} & 2.20 ms & 11.7 ms \\
-   & SOCP & \texttt{case89pegase} & 10.6 ms & 18.7 ms \\
-   & SOCP & \texttt{case118} & 7.10 ms & 20.6 ms \\
-   & SOCP & \texttt{case300} & 21.0 ms & 42.4 ms \\
-   & SOCP & \texttt{case1354pegase} & 203 ms & 280 ms \\
-   & SOCP & \texttt{case2869pegase} & 350 ms & 495 ms \\
-   & SDP & \texttt{case9} & 2.20 ms & 2.70 ms \\
-   & SDP & \texttt{case14} & 5.50 ms & 3.30 ms \\
-   & SDP & \texttt{case39} & 26.3 ms & 10.0 ms \\
-   & SDP & \texttt{case89pegase} & 1.13 s & 15.9 ms \\
-   & SDP & \texttt{case118} & 137 ms & 24.4 ms \\
-   & SDP & \texttt{case300} & 811 ms & 43.7 ms \\
-   & SDP & \texttt{case1354pegase} & 8.35 s & 241 ms \\
-   & SDP & \texttt{case2869pegase} & -- & -- \\
+  \multirow{16}{*}{AC-OPF} & SOCP & \texttt{case9} & 1.80 ms & 4.40 ms \\
+   & SOCP & \texttt{case14} & 0.60 ms & 3.60 ms \\
+   & SOCP & \texttt{case39} & 2.40 ms & 20.6 ms \\
+   & SOCP & \texttt{case89pegase} & 10.4 ms & 18.7 ms \\
+   & SOCP & \texttt{case118} & 6.80 ms & 19.8 ms \\
+   & SOCP & \texttt{case300} & 20.0 ms & 41.0 ms \\
+   & SOCP & \texttt{case1354pegase} & 128 ms & 247 ms \\
+   & SOCP & \texttt{case2869pegase} & 349 ms & 467 ms \\
+   & SDP & \texttt{case9} & 2.10 ms & 4.40 ms \\
+   & SDP & \texttt{case14} & 5.00 ms & 3.60 ms \\
+   & SDP & \texttt{case39} & 27.4 ms & 20.6 ms \\
+   & SDP & \texttt{case89pegase} & 1.10 s & 18.7 ms \\
+   & SDP & \texttt{case118} & 128 ms & 19.8 ms \\
+   & SDP & \texttt{case300} & 787 ms & 41.0 ms \\
+   & SDP & \texttt{case1354pegase} & 8.28 s & 247 ms \\
+   & SDP & \texttt{case2869pegase} & 40.3 s\textsuperscript{$\dagger$} & 467 ms \\
 \midrule
   \multirow{2}{*}{Robust Knapsack} & None & \texttt{n=20000} & -- & 0.156 ms \\
    & None & \texttt{n=80000} & -- & 0.156 ms \\
