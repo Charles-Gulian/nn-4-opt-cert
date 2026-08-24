@@ -795,7 +795,7 @@ We fix a random channel matrix with $m = 4$, $n = 2$, sample transmitted signals
 The alternating current optimal power flow (AC-OPF) problem is solved by grid operators approximtely every five minutes to schedule generation at minimum cost subject to the physics of the electrical network.
 It is a non-convex QCQP parameterized by the real and reactive load $\bm{\theta} = (\mathbf{p}_D, \mathbf{q}_D)$ at each bus.
 
-Let us now write the AC-OPF formulation. Consider a power network with a set of buses $\mathcal{N} = \{1, 2, ..., n\}$, set of generator buses $\mathcal{G} \subseteq \mathcal{N}$, and set of lines $\mathcal{L} \subseteq \mathcal{N} \times \mathcal{N}$. We define the variables, parameters, and expressions associated with bus $k \in \mathcal{N}$ as follows:
+Let us now write the AC-OPF formulation. Consider a power network with a set of buses $\mathcal{N} = \{0, 1, 2, ..., n\}$, set of generator buses $\mathcal{G} \subseteq \mathcal{N}$, and set of lines $\mathcal{L} \subseteq \mathcal{N} \times \mathcal{N}$. We define the variables, parameters, and expressions associated with bus $k \in \mathcal{N}$ as follows:
 \begin{itemize}[itemsep=2pt, topsep=0pt, parsep=0pt, partopsep=0pt]
     \item $v_k = v_{dk} + j\, v_{qk}$: Apparent (real and reactive) voltage.
     \item $p_{Dk} + j\, q_{Dk}$: Real and reactive power demand or load.
@@ -1122,8 +1122,8 @@ Mean $v^\ast$ & Std $v^\ast$ & Relax.\ Gap$^\ast$ & MAE & $q_{99}$ \\
    & SDP & \texttt{case300} & 583,523 & 130,830 & 0 & 237 & 1,485 \\
    & SDP & \texttt{case1354pegase} & 67,676 & 13,279 & 0 & 4.84 & 19.4 \\
 \midrule
-  \multirow{2}{*}{Robust Knapsack} & None & \texttt{n=20000} & 28.8 & 1.15 & -- & 0.19 & 0.57 \\
-   & None & \texttt{n=80000} & 28.8 & 1.13 & -- & 0.14 & 0.44 \\
+  \multirow{2}{*}{Robust Knapsack} & Exact (Integer) & \texttt{n=20000} & 281 & 46.9 & 0 & 1.23 & 3.96 \\
+   & Continuous (Linear) & \texttt{n=20000} & 281 & 46.9 & 1.71 & 1.16 & 3.66 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1164,8 +1164,8 @@ Mean Gap$^\ast$ & Worst Gap$^\ast$ & TP & FP & TN & FN \\
    & SDP & \texttt{case300} & 235 & 9,692 & 3894 & 0 & 9 & 39 \\
    & SDP & \texttt{case1354pegase} & 5.96 & 32.9 & 3855 & 0 & 0 & 0 \\
 \midrule
-  \multirow{2}{*}{Robust Knapsack} & None & \texttt{n=20000} & 0.21 & 0.79 & 28 & 8 & 3789 & 1175 \\
-   & None & \texttt{n=80000} & 0.21 & 0.86 & 98 & 16 & 15308 & 4578 \\
+  \multirow{2}{*}{Robust Knapsack} & Exact (Integer) & \texttt{n=20000} & 9.02 & 24.5 & 50 & 4 & 4238 & 708 \\
+   & Continuous (Linear) & \texttt{n=20000} & 9.02 & 24.5 & 7 & 1 & 4241 & 751 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1229,8 +1229,8 @@ Relaxation Solve & Local Solve \\
    & SDP & \texttt{case1354pegase} & 8.28 s & 247 ms \\
    & SDP & \texttt{case2869pegase} & 40.3 s\textsuperscript{$\dagger$} & 467 ms \\
 \midrule
-  \multirow{2}{*}{Robust Knapsack} & None & \texttt{n=20000} & -- & 0.156 ms \\
-   & None & \texttt{n=80000} & -- & 0.156 ms \\
+  \multirow{2}{*}{Robust Knapsack} & Exact (Integer) & \texttt{n=20000} & -- & 0.0687 ms \\
+   & Continuous (Linear) & \texttt{n=20000} & -- & 0.0687 ms \\
 \bottomrule
 \end{tabular}
 \end{table}
