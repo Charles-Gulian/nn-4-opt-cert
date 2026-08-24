@@ -1,18 +1,23 @@
-"""Emit the paper's three results tables as LaTeX (booktabs + multirow).
+"""Emit the paper's one combined results table as LaTeX (booktabs + multirow,
+landscape via pdflscape).
 
 Reads results/table_{offline,online,timing}.csv (written by
-compute_final_tables.py) and writes results/tables_generated.tex,
-paste-able directly into NN4OPT_TMLR/main-rewrite.tex in place of the
-existing \\begin{table}...\\end{table} blocks for tab:offline/tab:online/
-tab:timing (labels match, so in-text \\ref's keep working unchanged).
+compute_final_tables.py) and writes results/tables_generated.tex, paste-able
+directly into NN4OPT_TMLR/main-rewrite.tex in place of the existing
+\\begin{landscape}...\\end{landscape} block for tab:combined (label matches, so
+in-text \\ref's keep working unchanged).
 
-Column format (offline/online), approved 2026-08-24: drop the old grouped
-headers (Data Generation/Convexification/Training/Calibration/Deployment)
-and the old std/pct-infeasible/relax-gap/opt-gap columns, in favor of the
-paper's own v_r/v/f notation directly:
-    Table 2 (offline): v_r(theta) | v(theta) | f(x_hat;theta) | MAE | q_99
-    Table 3 (online):  delta | TP | FP | TN | FN
-Table 4 (timing) is unchanged from the original format.
+Column format, approved 2026-08-24 (offline+online+timing merged into one
+table): v_r(theta) | v(theta) | f(x_hat;theta) | MAE | q_99 | delta | TP | FP
+| TN | FN | Relaxation Solve | Local Solve, dropping the old grouped headers
+and the old std/pct-infeasible/relax-gap/opt-gap columns in favor of the
+paper's own v_r/v/f notation directly (gaps are visible by eye from the raw
+values).
+
+NOTE on case2869pegase's chordal SDP: it has no offline/online row (no
+certification was ever computed for it -- see the paper's dagger footnote),
+so it is NOT in KEEP and must be spliced in as a timing-only row by hand when
+pasting into the document (as already done in main-rewrite.tex).
 
 Usage:  python scripts/emit_latex_tables.py
 """
@@ -64,7 +69,7 @@ def num(x, blank="--"):
 
 
 def sec(x):
-    """Solve time in s / ms (unchanged from the original timing table)."""
+    """Solve time in s / ms."""
     if x is None or (isinstance(x, float) and not np.isfinite(x)):
         return "--"
     return f"{x*1e3:.3g} ms" if x < 1 else f"{x:.3g} s"
@@ -93,18 +98,32 @@ def _load(name):
     return rows
 
 
-def _grouped_body(rows, cell_fn):
+def _grouped_body(off_rows, onl_rows, tim_rows):
     out = []
     i = 0
-    while i < len(rows):
+    n = len(off_rows)
+    while i < n:
         j = i
-        while j < len(rows) and rows[j]["experiment"] == rows[i]["experiment"]:
+        while j < n and off_rows[j]["experiment"] == off_rows[i]["experiment"]:
             j += 1
         for k in range(i, j):
-            r = rows[k]
-            exp_cell = rf"\multirow{{{j-i}}}{{*}}{{{r['experiment']}}}" if k == i else ""
-            out.append("  " + " & ".join(
-                [exp_cell, r["relaxation"], _texcase(r["case"])] + cell_fn(r)) + r" \\")
+            o, l, t = off_rows[k], onl_rows[k], tim_rows[k]
+            exp_cell = rf"\multirow{{{j-i}}}{{*}}{{{o['experiment']}}}" if k == i else ""
+            # AC-OPF is nonconvex and generally intractable to solve exactly,
+            # so v(theta) is NEVER genuinely available there (only relaxation
+            # values of varying tightness stand in for it).
+            vtrue_cell = "--" if o["experiment"] == "AC-OPF" else num(o["mean_vtrue"])
+            tp = "--" if not np.isfinite(l["TP"]) else f"{int(round(l['TP']))}"
+            fp = "--" if not np.isfinite(l["FP"]) else f"{int(round(l['FP']))}"
+            tn = "--" if not np.isfinite(l["TN"]) else f"{int(round(l['TN']))}"
+            fn = "--" if not np.isfinite(l["FN"]) else f"{int(round(l['FN']))}"
+            relax_cell = sec(t["relax_solve_s"]) + (r"\textsuperscript{$\dagger$}" if t.get("dagger") else "")
+            cells = [
+                num(o["mean_vr"]), vtrue_cell, num(o["mean_f"]), num(o["mae"]), num(o["q_offset"]),
+                num(l["delta"]), tp, fp, tn, fn,
+                relax_cell, sec(t["local_solve_s"]),
+            ]
+            out.append("  " + " & ".join([exp_cell, o["relaxation"], _texcase(o["case"])] + cells) + r" \\")
         out.append(r"\midrule")
         i = j
     if out and out[-1] == r"\midrule":
@@ -112,77 +131,78 @@ def _grouped_body(rows, cell_fn):
     return "\n".join(out)
 
 
-def offline_table(rows):
-    def cells(r):
-        # AC-OPF is nonconvex and generally intractable to solve exactly, so
-        # v(theta) is NEVER genuinely available there (only relaxation
-        # values of varying tightness stand in for it) -- blank rather than
-        # show a relaxation value under a v(theta) header.
-        vtrue_cell = "--" if r["experiment"] == "AC-OPF" else num(r["mean_vtrue"])
-        return [num(r["mean_vr"]), vtrue_cell, num(r["mean_f"]),
-                num(r["mae"]), num(r["q_offset"])]
-    return rf"""\begin{{table}}[t]
+def _splice_case2869_sdp(off_rows, onl_rows, tim_rows):
+    """case2869pegase's chordal SDP has no offline/online row (no
+    certification was ever computed for it -- see the paper's dagger
+    footnote), but DOES have a timing-only measurement. Splice a synthetic
+    row into all three lists (blank offline/online) right after the AC-OPF
+    group's last row, so it renders inside AC-OPF's multirow block rather
+    than appended after Knapsack."""
+    acopf_idx = [i for i, r in enumerate(off_rows) if r["experiment"] == "AC-OPF"]
+    insert_at = acopf_idx[-1] + 1
+    blank = dict(experiment="AC-OPF", relaxation="SDP", case="case2869pegase",
+                mean_vr=None, mean_vtrue=None, mean_f=None, mae=None, q_offset=None)
+    blank_onl = dict(experiment="AC-OPF", relaxation="SDP", case="case2869pegase",
+                     delta=None, TP=np.nan, FP=np.nan, TN=np.nan, FN=np.nan)
+    # from results/acopf-cert/acopf_chordal_sdp_case2869pegase/solve_times.json:
+    # only 1 of 5 attempted instances converged -- a single sample, flagged
+    # with a dagger in the caption rather than presented as a stable mean.
+    tim_row = dict(experiment="AC-OPF", relaxation="SDP", case="case2869pegase",
+                   relax_solve_s=40.327943418, local_solve_s=0.4667142857142857,
+                   dagger=True)
+    off_rows.insert(insert_at, blank)
+    onl_rows.insert(insert_at, blank_onl)
+    tim_rows.insert(insert_at, tim_row)
+
+
+def combined_table(off_rows, onl_rows, tim_rows):
+    return rf"""\begin{{landscape}}
+\begin{{table}}[p]
 \centering\footnotesize
-\caption{{Offline results, averaged over the four folds. ${{}}^\ast$AC-OPF is nonconvex and
-generally intractable to solve exactly, so genuine $v(\bm\theta)$ is never available there
-(only relaxation values of varying tightness); shown as --.}}
-\label{{tab:offline}}
-\begin{{tabular}}{{lll rrr rr}}
+\caption{{All results combined, at the fixed operating point $\delta = 3\%\cdot\mathrm{{std}}(v(\bm\theta))$
+and $\alpha = 1\%$ (offset $q_{{99}}$), averaged over the four folds. ${{}}^\ast$AC-OPF is nonconvex and
+generally intractable to solve exactly, so genuine $v(\bm\theta)$ is never available there (only
+relaxation values of varying tightness); shown as --. Timing: both columns of a given row are
+measured identically (like-for-like); the local solver does not depend on the relaxation it is
+compared against, so its solve time is measured once per experiment (per AC-OPF case; once for
+inverse kinematics) and reused across relaxation rows. For AC-OPF, whose local solver (IPOPT) is
+invoked through a file-based modelling interface, we report \emph{{solver-internal}} time on both
+sides (parsed from IPOPT's own timing log for the local column) so the comparison is not dominated
+by Python model construction or process-launch overhead. Mean over $50$ random instances per case
+(smallest six AC-OPF cases) or $3$--$8$ for \texttt{{case1354pegase}}/\texttt{{case2869pegase}}'s SOCP
+and \texttt{{case1354pegase}}'s chordal SDP; non-converged instances excluded from both timing
+columns. \textsuperscript{{$\dagger$}}For \texttt{{case2869pegase}}'s chordal SDP, only $1$ of $5$
+attempted instances converged (each costing $\sim\!70$s regardless of outcome); we report that
+single solve time rather than assert a stable average, and omit its offline/online columns entirely
+since no certification was computed for it, consistent with treating this relaxation as effectively
+intractable at scale (\S\ref{{subsec:acopf-experiment}}).}}
+\label{{tab:combined}}
+\resizebox{{\linewidth}}{{!}}{{%
+\begin{{tabular}}{{lll rrr rr r rrrr rr}}
 \toprule
+& & & \multicolumn{{5}}{{c}}{{Offline}} & \multicolumn{{5}}{{c}}{{Online}} & \multicolumn{{2}}{{c}}{{Timing}} \\
+\cmidrule(lr){{4-8}}\cmidrule(lr){{9-13}}\cmidrule(lr){{14-15}}
 \textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
-$\bar v_r(\bm\theta)$ & $\bar v(\bm\theta)^\ast$ & $\bar f(\hat{{\mathbf{{x}}}};\bm\theta)$ &
-MAE & $q_{{99}}$ \\
+$\bar v_r(\bm\theta)$ & $\bar v(\bm\theta)^\ast$ & $\bar f(\hat{{\mathbf{{x}}}};\bm\theta)$ & MAE & $q_{{99}}$ &
+$\delta$ & TP & FP & TN & FN &
+Relax.\ Solve & Local Solve \\
 \midrule
-{_grouped_body(rows, cells)}
+{_grouped_body(off_rows, onl_rows, tim_rows)}
 \bottomrule
-\end{{tabular}}
-\end{{table}}"""
-
-
-def online_table(rows):
-    def cells(r):
-        return [num(r["delta"]), f"{int(round(r['TP']))}", f"{int(round(r['FP']))}",
-                f"{int(round(r['TN']))}", f"{int(round(r['FN']))}"]
-    return rf"""\begin{{table}}[t]
-\centering\footnotesize
-\caption{{Online (deployment) results at $\delta = 3\%\cdot\mathrm{{std}}(v(\bm{{\theta}}))$ and
-$\alpha = 1\%$ (offset $q_{{99}}$), averaged over the four folds.}}
-\label{{tab:online}}
-\begin{{tabular}}{{lll r rrrr}}
-\toprule
-\textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
-$\delta$ & TP & FP & TN & FN \\
-\midrule
-{_grouped_body(rows, cells)}
-\bottomrule
-\end{{tabular}}
-\end{{table}}"""
-
-
-def timing_table(rows):
-    def cells(r):
-        return [sec(r["relax_solve_s"]), sec(r["local_solve_s"])]
-    return rf"""\begin{{table}}[t]
-\centering\footnotesize
-\caption{{Mean solve times: the convex relaxation (offline) vs.\ the fast local solver.}}
-\label{{tab:timing}}
-\begin{{tabular}}{{lll rr}}
-\toprule
-\textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
-Relaxation Solve & Local Solve \\
-\midrule
-{_grouped_body(rows, cells)}
-\bottomrule
-\end{{tabular}}
-\end{{table}}"""
+\end{{tabular}}%
+}}
+\end{{table}}
+\end{{landscape}}"""
 
 
 def main():
     off_rows = _load("offline")
     onl_rows = _load("online")
     tim_rows = _load("timing")
-    tex = "\n\n".join([offline_table(off_rows), online_table(onl_rows),
-                       timing_table(tim_rows)])
+    assert len(off_rows) == len(onl_rows) == len(tim_rows), "row-set mismatch across tables"
+    _splice_case2869_sdp(off_rows, onl_rows, tim_rows)
+
+    tex = combined_table(off_rows, onl_rows, tim_rows)
     out = RESULTS / "tables_generated.tex"
     out.write_text(tex + "\n")
     print(f"wrote {out}")
