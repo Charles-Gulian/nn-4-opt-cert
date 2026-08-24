@@ -1,0 +1,208 @@
+\begin{thebibliography}{40}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Ahmadi \& Majumdar(2016)Ahmadi and Majumdar]{ahmadi2016some}
+Amir~Ali Ahmadi and Anirudha Majumdar.
+\newblock Some applications of polynomial optimization in operations research and real-time decision making.
+\newblock \emph{Optimization Letters}, 10:\penalty0 709--729, 2016.
+
+\bibitem[Amos et~al.(2017)Amos, Xu, and Kolter]{pmlr-v70-amos17b}
+Brandon Amos, Lei Xu, and J.~Zico Kolter.
+\newblock Input convex neural networks.
+\newblock In \emph{Proceedings of the 34th International Conference on Machine Learning}, volume~70 of \emph{Proceedings of Machine Learning Research}, pp.\  146--155. PMLR, 06--11 Aug 2017.
+
+\bibitem[Baker(2019)]{baker2019learning}
+Kyri Baker.
+\newblock Learning warm-start points for ac optimal power flow.
+\newblock In \emph{2019 IEEE 29th International Workshop on Machine Learning for Signal Processing (MLSP)}, pp.\  1--6. IEEE, 2019.
+
+\bibitem[Bamberger et~al.(2025)Bamberger, Heckel, and Krahmer]{bamberger2025approximating}
+Stefan Bamberger, Reinhard Heckel, and Felix Krahmer.
+\newblock Approximating positive homogeneous functions with scale invariant neural networks.
+\newblock \emph{Journal of Approximation Theory}, pp.\  106177, 2025.
+
+\bibitem[Bertsimas \& Stellato(2022)Bertsimas and Stellato]{bertsimas2022online}
+Dimitris Bertsimas and Bartolomeo Stellato.
+\newblock Online mixed-integer optimization in milliseconds.
+\newblock \emph{INFORMS Journal on Computing}, 34\penalty0 (4):\penalty0 2229--2248, 2022.
+
+\bibitem[Beugnot et~al.(2023)Beugnot, Mairal, and Rudi]{beugnot2023gloptinetsscalablenonconvexoptimization}
+Gaspard Beugnot, Julien Mairal, and Alessandro Rudi.
+\newblock Gloptinets: Scalable non-convex optimization with certificates, 2023.
+\newblock URL \url{https://arxiv.org/abs/2306.14932}.
+
+\bibitem[Bose et~al.(2015)Bose, Gayme, Chandy, and Low]{bose2015quadratically}
+Subhonmesh Bose, Dennice~F Gayme, K~Mani Chandy, and Steven~H Low.
+\newblock Quadratically constrained quadratic programs on acyclic graphs with application to power flow.
+\newblock \emph{IEEE Transactions on Control of Network Systems}, 2\penalty0 (3):\penalty0 278--287, 2015.
+
+\bibitem[Boyd \& Vandenberghe(2004)Boyd and Vandenberghe]{boyd2004convex}
+Stephen Boyd and Lieven Vandenberghe.
+\newblock \emph{Convex optimization}.
+\newblock Cambridge university press, 2004.
+
+\bibitem[Bukhsh et~al.(2013)Bukhsh, Grothey, McKinnon, and Trodden]{bukhsh2013local}
+Waqquas~A Bukhsh, Andreas Grothey, Ken~IM McKinnon, and Paul~A Trodden.
+\newblock Local solutions of the optimal power flow problem.
+\newblock \emph{IEEE Transactions on Power Systems}, 28\penalty0 (4):\penalty0 4780--4788, 2013.
+
+\bibitem[Czarnecki et~al.(2017)Czarnecki, Osindero, Jaderberg, Swirszcz, and Pascanu]{czarnecki2017sobolev}
+Wojciech~M Czarnecki, Simon Osindero, Max Jaderberg, Grzegorz Swirszcz, and Razvan Pascanu.
+\newblock Sobolev training for neural networks.
+\newblock \emph{Advances in neural information processing systems}, 30, 2017.
+
+\bibitem[Dalkiran \& Ghalami(2018)Dalkiran and Ghalami]{dalkiran2018linear}
+Evrim Dalkiran and Laleh Ghalami.
+\newblock On linear programming relaxations for solving polynomial programming problems.
+\newblock \emph{Computers \& Operations Research}, 99:\penalty0 67--77, 2018.
+
+\bibitem[Dauphin et~al.(2014)Dauphin, Pascanu, Gulcehre, Cho, Ganguli, and Bengio]{dauphin2014identifying}
+Yann~N Dauphin, Razvan Pascanu, Caglar Gulcehre, Kyunghyun Cho, Surya Ganguli, and Yoshua Bengio.
+\newblock Identifying and attacking the saddle point problem in high-dimensional non-convex optimization.
+\newblock \emph{Advances in neural information processing systems}, 27, 2014.
+
+\bibitem[Deka \& Misra(2019)Deka and Misra]{deka2019learning}
+Deepjyoti Deka and Sidhant Misra.
+\newblock Learning for dc-opf: Classifying active sets using neural nets.
+\newblock In \emph{2019 IEEE Milan PowerTech}, pp.\  1--6. IEEE, 2019.
+
+\bibitem[{Gurobi Optimization, LLC}(2024)]{gurobi}
+{Gurobi Optimization, LLC}.
+\newblock {Gurobi Optimizer Reference Manual}, 2024.
+\newblock URL \url{https://www.gurobi.com}.
+
+\bibitem[Jiang et~al.(2024)Jiang, Wang, Wu, Wang, and Lu]{jiang2024advancements}
+Bozhen Jiang, Qin Wang, Shengyu Wu, Yidi Wang, and Gang Lu.
+\newblock Advancements and future directions in the application of machine learning to ac optimal power flow: a critical review.
+\newblock \emph{Energies}, 17\penalty0 (6):\penalty0 1381, 2024.
+
+\bibitem[Josz \& Henrion(2016)Josz and Henrion]{josz2016strong}
+C{\'e}dric Josz and Didier Henrion.
+\newblock Strong duality in lasserre’s hierarchy for polynomial optimization.
+\newblock \emph{Optimization Letters}, 10\penalty0 (1):\penalty0 3--10, 2016.
+
+\bibitem[Kumar et~al.(2020)Kumar, Wu, Ali, Mallipeddi, Suganthan, and Das]{kumar2020test}
+Abhishek Kumar, Guohua Wu, Mostafa~Z Ali, Rammohan Mallipeddi, Ponnuthurai~Nagaratnam Suganthan, and Swagatam Das.
+\newblock A test-suite of non-convex constrained optimization problems from the real-world and some baseline results.
+\newblock \emph{Swarm and Evolutionary Computation}, 56:\penalty0 100693, 2020.
+
+\bibitem[Lasserre(2001)]{lasserre2001global}
+Jean~B Lasserre.
+\newblock Global optimization with polynomials and the problem of moments.
+\newblock \emph{SIAM Journal on optimization}, 11\penalty0 (3):\penalty0 796--817, 2001.
+
+\bibitem[Lasserre(2015)]{lasserre2015introduction}
+Jean~Bernard Lasserre.
+\newblock \emph{An introduction to polynomial and semi-algebraic optimization}, volume~52.
+\newblock Cambridge University Press, 2015.
+
+\bibitem[Lavaei \& Low(2012)Lavaei and Low]{lavaei2012zero}
+Javad Lavaei and Steven~H Low.
+\newblock Zero duality gap in optimal power flow problem.
+\newblock \emph{IEEE Transactions on Power Systems}, 1\penalty0 (27):\penalty0 92--107, 2012.
+
+\bibitem[Lemon et~al.(2016)Lemon, So, Ye, et~al.]{lemon2016low}
+Alex Lemon, Anthony Man-Cho So, Yinyu Ye, et~al.
+\newblock Low-rank semidefinite programming: Theory and applications.
+\newblock \emph{Foundations and Trends{\textregistered} in Optimization}, 2\penalty0 (1-2):\penalty0 1--156, 2016.
+
+\bibitem[Madani et~al.(2014)Madani, Ashraphijuo, and Lavaei]{madani2014sdp}
+Ramtin Madani, Morteza Ashraphijuo, and Javad Lavaei.
+\newblock Sdp solver of optimal power flow users manual, 2014.
+
+\bibitem[Molzahn et~al.(2016)Molzahn, Josz, and Hiskens]{molzahn2016moment}
+Daniel~K Molzahn, C{\'e}dric Josz, and Ian~A Hiskens.
+\newblock Moment relaxations of optimal power flow problems: beyond the convex hull.
+\newblock In \emph{2016 IEEE Global Conference on Signal and Information Processing (GlobalSIP)}, pp.\  856--860. IEEE, 2016.
+
+\bibitem[Murty \& Kabadi(1985)Murty and Kabadi]{murty1985some}
+Katta~G Murty and Santosh~N Kabadi.
+\newblock Some np-complete problems in quadratic and nonlinear programming.
+\newblock Technical report, 1985.
+
+\bibitem[Pan(2021)]{pan2021deepopf}
+Xiang Pan.
+\newblock Deepopf: deep neural networks for optimal power flow.
+\newblock In \emph{Proceedings of the 8th ACM International Conference on Systems for Energy-Efficient Buildings, Cities, and Transportation}, pp.\  250--251, 2021.
+
+\bibitem[Pan et~al.(2022)Pan, Chen, Zhao, and Low]{pan2022deepopf}
+Xiang Pan, Minghua Chen, Tianyu Zhao, and Steven~H Low.
+\newblock Deepopf: A feasibility-optimized deep neural network approach for ac optimal power flow problems.
+\newblock \emph{IEEE Systems Journal}, 17\penalty0 (1):\penalty0 673--683, 2022.
+
+\bibitem[Parrilo(2003)]{parrilo2003semidefinite}
+Pablo~A Parrilo.
+\newblock Semidefinite programming relaxations for semialgebraic problems.
+\newblock \emph{Mathematical programming}, 96:\penalty0 293--320, 2003.
+
+\bibitem[{Power Systems Test Case Archive}(1993)]{ieeetestcases}
+{Power Systems Test Case Archive}.
+\newblock Ieee {P}ower {S}ystems {T}est {C}ase {A}rchive.
+\newblock \url{https://labs.ece.uw.edu/pstca/}, 1993.
+\newblock University of Washington, Department of Electrical Engineering.
+
+\bibitem[Putinar(1993)]{putinar1993positive}
+Mihai Putinar.
+\newblock Positive polynomials on compact semi-algebraic sets.
+\newblock \emph{Indiana University Mathematics Journal}, 42\penalty0 (3):\penalty0 969--984, 1993.
+
+\bibitem[Rosemberg et~al.(2024)Rosemberg, Tanneau, Fanzeres, Garcia, and Van~Hentenryck]{rosemberg2024learning}
+Andrew Rosemberg, Mathieu Tanneau, Bruno Fanzeres, Joaquim Garcia, and Pascal Van~Hentenryck.
+\newblock Learning optimal power flow value functions with input-convex neural networks.
+\newblock \emph{Electric power systems research}, 235:\penalty0 110643, 2024.
+
+\bibitem[Samuel et~al.(2017)Samuel, Diskin, and Wiesel]{samuel2017deep}
+Neev Samuel, Tzvi Diskin, and Ami Wiesel.
+\newblock Deep mimo detection.
+\newblock In \emph{2017 IEEE 18th International Workshop on Signal Processing Advances in Wireless Communications (SPAWC)}, pp.\  1--5. IEEE, 2017.
+
+\bibitem[Sherali \& Adams(1990)Sherali and Adams]{sherali1990hierarchy}
+Hanif~D Sherali and Warren~P Adams.
+\newblock A hierarchy of relaxations between the continuous and convex hull representations for zero-one programming problems.
+\newblock \emph{SIAM Journal on Discrete Mathematics}, 3\penalty0 (3):\penalty0 411--430, 1990.
+
+\bibitem[Sherali \& Adams(2013)Sherali and Adams]{sherali2013reformulation}
+Hanif~D Sherali and Warren~P Adams.
+\newblock \emph{A reformulation-linearization technique for solving discrete and continuous nonconvex problems}, volume~31.
+\newblock Springer Science \& Business Media, 2013.
+
+\bibitem[Singh et~al.(2021)Singh, Kekatos, and Giannakis]{singh2021learning}
+Manish~K Singh, Vassilis Kekatos, and Georgios~B Giannakis.
+\newblock Learning to solve the ac-opf using sensitivity-informed deep neural networks.
+\newblock \emph{IEEE Transactions on Power Systems}, 37\penalty0 (4):\penalty0 2833--2846, 2021.
+
+\bibitem[Sojoudi \& Lavaei(2014)Sojoudi and Lavaei]{sojoudi2014exactness}
+Somayeh Sojoudi and Javad Lavaei.
+\newblock Exactness of semidefinite relaxations for nonlinear optimization problems with underlying graph structure.
+\newblock \emph{SIAM Journal on Optimization}, 24\penalty0 (4):\penalty0 1746--1778, 2014.
+
+\bibitem[Sun et~al.(2023)Sun, Huang, Christianson, Hajiesmaili, Wierman, and Boutaba]{sun2023online}
+Bo~Sun, Jerry Huang, Nicolas Christianson, Mohammad Hajiesmaili, Adam Wierman, and Raouf Boutaba.
+\newblock Online algorithms with uncertainty-quantified predictions.
+\newblock \emph{arXiv preprint arXiv:2310.11558}, 2023.
+
+\bibitem[Van~Hentenryck(2021)]{van2021machine}
+Pascal Van~Hentenryck.
+\newblock Machine learning for optimal power flows.
+\newblock \emph{Tutorials in Operations Research: Emerging Optimization Methods and Modeling Techniques with Applications}, pp.\  62--82, 2021.
+
+\bibitem[Zhang \& Zhang(2022)Zhang and Zhang]{zhang2022learning}
+Ling Zhang and Baosen Zhang.
+\newblock Learning to solve the ac optimal power flow via a lagrangian approach.
+\newblock In \emph{2022 North American Power Symposium (NAPS)}, pp.\  1--6. IEEE, 2022.
+
+\bibitem[Zhang et~al.(2021)Zhang, Chen, and Zhang]{zhang2021convex}
+Ling Zhang, Yize Chen, and Baosen Zhang.
+\newblock A convex neural network solver for dcopf with generalization guarantees.
+\newblock \emph{IEEE Transactions on Control of Network Systems}, 9\penalty0 (2):\penalty0 719--730, 2021.
+
+\bibitem[Zhou \& Low(2021)Zhou and Low]{zhou2021conditions}
+Fengyu Zhou and Steven~H Low.
+\newblock Conditions for exact convex relaxation and no spurious local optima.
+\newblock \emph{IEEE Transactions on Control of Network Systems}, 9\penalty0 (3):\penalty0 1468--1480, 2021.
+
+\end{thebibliography}

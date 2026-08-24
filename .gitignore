@@ -6,6 +6,6 @@ __pycache__/
 data/
 models/
 results/
-figures/
+/figures/
 logs/
 /OPF_Solver_Guide.pdf

@@ -1,0 +1,9 @@
+# LaTeX build artifacts (regenerate via latexmk -pdf main-rewrite.tex)
+*.aux
+*.log
+*.blg
+*.fls
+*.fdb_latexmk
+*.out
+*.synctex.gz
+.DS_Store
