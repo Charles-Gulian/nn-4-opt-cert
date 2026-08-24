@@ -1097,7 +1097,7 @@ use the relaxation value $v_r(\bm{\theta})$ for the mean, std, and relaxation ga
 & & & \multicolumn{2}{c}{Data Generation} & Convexification & Training & Calibration \\
 \cmidrule(lr){4-5}\cmidrule(lr){6-6}\cmidrule(lr){7-7}\cmidrule(lr){8-8}
 \textbf{Experiment} & \textbf{Relaxation} & \textbf{Case} &
-Mean $v^\ast$ & Std $v^\ast$ & Relax.\ Gap$^\ast$ & MAE & $q_{99}$ \\
+Mean $v_r(\bm{\theta})$ & Std $v_r(\bm{\theta})$ & Relax.\ Gap$^\ast$ & MAE & $q_{99}$ \\
 \midrule
   \multirow{1}{*}{QCQP} & Shor &  & 2.65 & 4.63 & 0 & 0.0022 & 0.012 \\
 \midrule
@@ -1122,7 +1122,7 @@ Mean $v^\ast$ & Std $v^\ast$ & Relax.\ Gap$^\ast$ & MAE & $q_{99}$ \\
    & SDP & \texttt{case300} & 583,523 & 130,830 & 0 & 237 & 1,485 \\
    & SDP & \texttt{case1354pegase} & 67,676 & 13,279 & 0 & 4.84 & 19.4 \\
 \midrule
-  \multirow{2}{*}{Robust Knapsack} & MI-SOCP & \texttt{n=25} & 281 & 46.9 & 0 & 1.23 & 3.96 \\
+  \multirow{2}{*}{Robust Knapsack} & Exact (Integer) & \texttt{n=25} & 281 & 46.9 & 0 & 1.23 & 3.96 \\
    & SOCP & \texttt{n=25} & 281 & 46.9 & 1.71 & 1.16 & 3.66 \\
 \bottomrule
 \end{tabular}
