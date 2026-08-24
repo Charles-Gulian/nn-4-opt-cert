@@ -3,7 +3,7 @@
 Single fixed problem instance (N_ITEMS=50 items; no case/relaxation grid like
 AC-OPF), so this is a simplified train_acopf.py: load the CSV, standardize
 inputs/target, 4-fold single-phase training with the SAME ablation-validated
-recipe (depth 6 x width 256, 1000 epochs), save self-contained checkpoints.
+recipe (depth 4 x width 64, 1500 epochs), save self-contained checkpoints.
 
 Usage:
     python scripts/train_knapsack.py
@@ -46,8 +46,8 @@ def main():
     p.add_argument("--n-train", type=int, default=20_000)
     p.add_argument("--data-dir", type=pathlib.Path, default=DEFAULT_DATA_DIR)
     p.add_argument("--folds", type=int, default=4)
-    p.add_argument("--hidden-dims", type=int, nargs="+", default=[256] * 6)
-    p.add_argument("--epochs", type=int, default=1000)
+    p.add_argument("--hidden-dims", type=int, nargs="+", default=[64] * 4)
+    p.add_argument("--epochs", type=int, default=1500)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--two-phase", action="store_true")

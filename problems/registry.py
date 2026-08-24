@@ -107,6 +107,33 @@ def _mimo_spec(n_train=20_000, n_test=5_000):
     )
 
 
+def _mimo_large_spec(n_train=20_000, n_test=5_000):
+    """Large-scale (m=64, n=32) MIMO detection, kind="self" for certification
+    (see problems/mimo_detection_large/problem.py docstring): exact ML ground
+    truth is intractable at n=32, so the SDP relaxation value is the ground
+    truth used downstream, not an independent exact solve."""
+    from problems.mimo_detection_large import problem as P
+    from problems.mimo_detection_large.generate_data import sample_parameters, _B_COLS
+
+    def build_relax_args(args):
+        prob, M_param, Z = P._build_sdp_problem()
+        return dict(args or {}, prob=prob, M_param=M_param, Z=Z)
+
+    return ProblemSpec(
+        key="mimo_large",
+        feature_cols=list(_B_COLS),
+        sample_parameters=sample_parameters,
+        solve_relax=P.solve_relaxation,
+        solve_local=P.solve_local,
+        build_relax_args=build_relax_args,
+        train_csv=PROJECT_ROOT / "data" / "mimo_detection_large" / f"train_{n_train}.csv",
+        test_csv=PROJECT_ROOT / "data" / "mimo_detection_large" / f"test_{n_test}.csv",
+        models_dir=PROJECT_ROOT / "models" / "mimo_large",
+        ckpt_pattern=f"dnn_mimo_large_n{n_train}_fold{{fold}}.pt",
+        results_dir=PROJECT_ROOT / "results" / "mimo_large",
+    )
+
+
 def _ik_spec(order, n_train=20_000, n_test=5_000):
     """order in {1, 2} selects the Lasserre relaxation level."""
     from problems.ik import problem as P
@@ -172,10 +199,11 @@ def _acopf_spec(case, relax, n_train=20_000, n_test=5_000):
 
 # Small-problem builders keyed by config name; called lazily via get_spec().
 _BUILDERS = {
-    "qcqp":     _qcqp_spec,
-    "mimo":     _mimo_spec,
-    "ik_lass1": lambda **kw: _ik_spec(1, **kw),
-    "ik_lass2": lambda **kw: _ik_spec(2, **kw),
+    "qcqp":       _qcqp_spec,
+    "mimo":       _mimo_spec,
+    "mimo_large": _mimo_large_spec,
+    "ik_lass1":   lambda **kw: _ik_spec(1, **kw),
+    "ik_lass2":   lambda **kw: _ik_spec(2, **kw),
 }
 
 SMALL_PROBLEM_KEYS = list(_BUILDERS)

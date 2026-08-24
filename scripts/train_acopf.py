@@ -151,16 +151,14 @@ def main():
     p.add_argument("--data-dir", type=pathlib.Path, default=DEFAULT_DATA_DIR,
                    help="Directory holding the train CSVs (default: data/acopf-hpc)")
     p.add_argument("--folds", type=int, default=4)   # 20000/4 = 5000 val per fold = test size
-    # depth 6 x width 256: a genuinely deep network whose certification-critical
-    # over-prediction tail (q95) is as good as or better than shallower nets, with
-    # no cost penalty worth worrying about.  Width 512 rarely earns its 2-4x params.
-    # See results/acopf/ablation_summary.csv.
-    p.add_argument("--hidden-dims", type=int, nargs="+", default=[256] * 6)
+    # depth 4 x width 64: the full SAVIO ablation (results/acopf/ablation_summary.csv,
+    # scored on q95_overpred_pct -- the certification-critical over-prediction
+    # tail, not mean MAPE) picked this over the deeper/wider configs tried earlier.
+    p.add_argument("--hidden-dims", type=int, nargs="+", default=[64] * 4)
     # Single-phase training (ablation-validated default): one cosine-annealed
-    # phase, 1000 epochs, lr 1e-3, batch 256.  Matches two-phase quality, ~1.5x
-    # faster; 1000 epochs chosen as the knee of the epoch ablation (the over-
-    # prediction tail's gains diminish past ~1000; 1500/2000 confirm the plateau).
-    p.add_argument("--epochs", type=int, default=1000)
+    # phase, 1500 epochs, lr 1e-3, batch 256.  Matches two-phase quality, ~1.5x
+    # faster.
+    p.add_argument("--epochs", type=int, default=1500)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--batch-size", type=int, default=256)
     # Opt-in two-phase schedule (pretrain then small-batch finetune).

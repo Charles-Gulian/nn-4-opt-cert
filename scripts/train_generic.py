@@ -3,7 +3,7 @@ in the registry (QCQP, MIMO, IK-lass1, IK-lass2).
 
 Generalizes scripts/train_acopf.py's recipe (already validated by ablation on
 AC-OPF) so every problem trains under the exact same deep/4-fold protocol:
-depth-6 width-256 DNN, single-phase 1000-epoch cosine-annealed AdamW, weight
+depth-4 width-64 DNN, single-phase 1500-epoch cosine-annealed AdamW, weight
 decay 1e-4, KFold(n_splits=4, shuffle=True, random_state=0).
 
 Train-only: consumes the labelled CSV already produced by generate_dataset.py
@@ -139,10 +139,10 @@ def main():
     p.add_argument("--n-train", type=int, default=20_000)
     p.add_argument("--n-test", type=int, default=5_000)
     p.add_argument("--folds", type=int, default=4)
-    # depth 6 x width 256 -- the ablation-validated recipe from AC-OPF, applied
+    # depth 4 x width 64 -- the ablation-validated recipe from AC-OPF, applied
     # uniformly here rather than re-tuning per problem.
-    p.add_argument("--hidden-dims", type=int, nargs="+", default=[256] * 6)
-    p.add_argument("--epochs", type=int, default=1000)
+    p.add_argument("--hidden-dims", type=int, nargs="+", default=[64] * 4)
+    p.add_argument("--epochs", type=int, default=1500)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--two-phase", action="store_true",

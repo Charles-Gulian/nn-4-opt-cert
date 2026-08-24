@@ -94,6 +94,11 @@ def solve_relaxation(p, args=None):
     """
     args = args or {}
     tol = args.get("tol", 1e-6)
+    # CLARABEL, not cvxpy's own default solver choice for SDPs (MOSEK): this
+    # environment's MOSEK license has expired (mosek.Error: err_license_expired),
+    # and CLARABEL is already the default elsewhere in this project (AC-OPF,
+    # knapsack, and the large-scale MIMO module) for exactly this reason.
+    solver = args.get("solver", cp.CLARABEL)
 
     prob = args.get("prob")
     M_param = args.get("M_param")
@@ -102,7 +107,7 @@ def solve_relaxation(p, args=None):
         prob, M_param, Z = _build_sdp_problem()
 
     M_param.value = _M_matrix(p)
-    value = prob.solve()
+    value = prob.solve(solver=solver)
 
     eigvals, eigvecs = np.linalg.eigh(Z.value)
     rank = int(np.sum(eigvals > tol * eigvals.max()))

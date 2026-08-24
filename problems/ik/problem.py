@@ -206,7 +206,7 @@ def solve_relaxation(p, args=None):
     args : dict, optional
         'l1', 'l2'    : link lengths (default DEFAULT_L1, DEFAULT_L2)
         'prob_cache'  : dict for re-using built cvxpy problems
-        'solver'      : cvxpy solver (default MOSEK)
+        'solver'      : cvxpy solver (default CLARABEL)
 
     Returns
     -------
@@ -219,7 +219,10 @@ def solve_relaxation(p, args=None):
     l1 = args.get("l1", DEFAULT_L1)
     l2 = args.get("l2", DEFAULT_L2)
     xd, yd = float(p[0]), float(p[1])
-    solver = args.get("solver", cp.MOSEK)
+    # CLARABEL, not cvxpy's own default (MOSEK): this environment's MOSEK
+    # license has expired, and CLARABEL is already the default elsewhere in
+    # this project (AC-OPF, knapsack, MIMO) for exactly this reason.
+    solver = args.get("solver", cp.CLARABEL)
 
     cache = args.get("prob_cache")
     cache_key = (l1, l2)
@@ -405,7 +408,7 @@ def solve_lasserre2(p, args=None):
     args : dict, optional
         'l1', 'l2'    : link lengths (default DEFAULT_L1, DEFAULT_L2)
         'prob_cache'  : dict; keyed by ("lasserre2", l1, l2)
-        'solver'      : cvxpy solver (default MOSEK)
+        'solver'      : cvxpy solver (default CLARABEL)
 
     Returns
     -------
@@ -416,7 +419,8 @@ def solve_lasserre2(p, args=None):
     l1 = args.get("l1", DEFAULT_L1)
     l2 = args.get("l2", DEFAULT_L2)
     xd, yd = float(p[0]), float(p[1])
-    solver = args.get("solver", cp.MOSEK)
+    # CLARABEL, not cvxpy's own default (MOSEK): see solve_relaxation above.
+    solver = args.get("solver", cp.CLARABEL)
 
     cache = args.get("prob_cache")
     cache_key = ("lasserre2", l1, l2)

@@ -64,13 +64,17 @@ def solve_relaxation(p, args=None):
     args = args or {}
     a, b = p
     tol = args.get("tol", 1e-6)
+    # CLARABEL, not cvxpy's own default (MOSEK): this environment's MOSEK
+    # license has expired, and CLARABEL is already the default elsewhere in
+    # this project (AC-OPF, knapsack, IK, MIMO) for exactly this reason.
+    solver = args.get("solver", cp.CLARABEL)
 
     prob, M0, X = args.get("prob"), args.get("M0"), args.get("X")
     if prob is None:
         prob, M0, X = _build_sdp_problem()
 
     M0.value = _M0(a, b)
-    value = prob.solve()
+    value = prob.solve(solver=solver)
 
     eigvals, eigvecs = np.linalg.eigh(X.value)
     rank = np.sum(eigvals > tol * eigvals.max())

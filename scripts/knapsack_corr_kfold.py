@@ -58,9 +58,9 @@ def main():
                     help="training pool size; uses the first n rows of the shared pool")
     ap.add_argument("--pool-file", default="pool_80000.npz")
     ap.add_argument("--test-file", default="test_5000.npz")
-    ap.add_argument("--epochs", type=int, default=1000)
+    ap.add_argument("--epochs", type=int, default=1500)
     ap.add_argument("--folds", type=int, default=4)
-    ap.add_argument("--hidden-dims", type=int, nargs="+", default=[256] * 6)
+    ap.add_argument("--hidden-dims", type=int, nargs="+", default=[64] * 4)
     ap.add_argument("--level", type=float, default=0.99)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--suffix", default="",
