@@ -18,7 +18,9 @@
 \usepackage{subcaption}
 \usepackage{booktabs} % for professional tables
 \usepackage{multirow}
-\usepackage{pdflscape} % for the landscape combined-results table
+\usepackage{rotating} % for the sideways combined-results table (draws content
+                       % genuinely rotated, unlike pdflscape's /Rotate flag which
+                       % many viewers/printers don't honor)
 \usepackage{xcolor}
 \usepackage{tcolorbox}
 \tcbuselibrary{breakable} % Required for page-splitting
@@ -1087,8 +1089,7 @@ Because the value function of a combinatorial problem is comparatively hard to l
 
 Table~\ref{tab:combined} reports all results at the fixed operating point $\delta = 3\% \times\mathrm{std.\,}v(\bm{\theta})$ and $\alpha = 0.01$. The offline columns give the mean relaxation value $\bar v_r(\bm\theta)$ the network is trained to predict, the mean true optimal value $\bar v(\bm\theta)$ where tractable, the mean value $\bar f(\hat{\mathbf{x}};\bm\theta)$ achieved by the fast local solver, the network's mean absolute error, and the calibrated conformal offset $\hat q_{99}$ -- the gap between $\bar v_r$ and $\bar v$ is the relaxation gap, and the gap between $\bar f$ and $\bar v$ (or $\bar v_r$, where $\bar v$ is unavailable) is the local solver's mean optimality gap. The online columns give the certification threshold $\delta$ used and the resulting certification counts. Across every experiment the false positive rate is near-zero or close to the $1\%$ target, while the number of certified optima (TP) is high wherever the network is accurate enough that $\hat{q}_{99}$ fits within $\delta$ (AC-OPF, inverse kinematics, QCQP), and low where it is not (MIMO detection, and to a lesser extent robust knapsack), whose rougher value functions the network fits less precisely. The timing columns show the offline solve cost: higher-order relaxations are consistently, and often dramatically, slower, and increasingly so as the system grows---on AC-OPF the chordal SDP costs under $3\times$ the SOCP on \texttt{case9} but is $19$--$107\times$ slower on \texttt{case118}--\texttt{case89pegase}, remaining over $40\times$ slower even on the much larger \texttt{case1354pegase}---whereas a network prediction is sub-microsecond. The local solver, by contrast, does not show a comparably clean scaling trend relative to the SOCP relaxation; we caution against over-reading this comparison given the sample size.
 
-\begin{landscape}
-\begin{table}[p]
+\begin{sidewaystable}[p]
 \centering\footnotesize
 \caption{All results combined, at the fixed operating point $\delta = 3\%\cdot\mathrm{std}(v(\bm\theta))$
 and $\alpha = 1\%$ (offset $q_{99}$), averaged over the four folds. ${}^\ast$AC-OPF is nonconvex and
@@ -1147,8 +1148,7 @@ Relax.\ Solve & Local Solve \\
 \bottomrule
 \end{tabular}%
 }
-\end{table}
-\end{landscape}
+\end{sidewaystable}
 
 
 \section{Discussion} \label{sec:discussion}

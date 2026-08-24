@@ -1,11 +1,14 @@
 """Emit the paper's one combined results table as LaTeX (booktabs + multirow,
-landscape via pdflscape).
+sideways via the `rotating` package's sidewaystable -- NOT pdflscape: that
+package rotates via the PDF /Rotate flag, which many viewers/printers don't
+honor, so the table rendered incorrectly for some readers. sidewaystable
+draws the content genuinely rotated instead, which always renders correctly.
 
 Reads results/table_{offline,online,timing}.csv (written by
 compute_final_tables.py) and writes results/tables_generated.tex, paste-able
 directly into NN4OPT_TMLR/main-rewrite.tex in place of the existing
-\\begin{landscape}...\\end{landscape} block for tab:combined (label matches, so
-in-text \\ref's keep working unchanged).
+\\begin{sidewaystable}...\\end{sidewaystable} block for tab:combined (label
+matches, so in-text \\ref's keep working unchanged).
 
 Column format, approved 2026-08-24 (offline+online+timing merged into one
 table): v_r(theta) | v(theta) | f(x_hat;theta) | MAE | q_99 | delta | TP | FP
@@ -156,8 +159,7 @@ def _splice_case2869_sdp(off_rows, onl_rows, tim_rows):
 
 
 def combined_table(off_rows, onl_rows, tim_rows):
-    return rf"""\begin{{landscape}}
-\begin{{table}}[p]
+    return rf"""\begin{{sidewaystable}}[p]
 \centering\footnotesize
 \caption{{All results combined, at the fixed operating point $\delta = 3\%\cdot\mathrm{{std}}(v(\bm\theta))$
 and $\alpha = 1\%$ (offset $q_{{99}}$), averaged over the four folds. ${{}}^\ast$AC-OPF is nonconvex and
@@ -191,8 +193,7 @@ Relax.\ Solve & Local Solve \\
 \bottomrule
 \end{{tabular}}%
 }}
-\end{{table}}
-\end{{landscape}}"""
+\end{{sidewaystable}}"""
 
 
 def main():
