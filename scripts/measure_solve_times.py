@@ -58,7 +58,9 @@ Usage:
 import argparse
 import copy
 import json
+import os
 import pathlib
+import re
 import sys
 import time
 import logging
@@ -67,12 +69,67 @@ import warnings
 warnings.filterwarnings("ignore")
 logging.getLogger("pyomo").setLevel(logging.ERROR)   # silence W1002 init spam
 import numpy as np
+import pyomo.environ as pyo
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from problems.acopf.network import load_network
 from problems.acopf.problem import solve_relaxation, solve_local
+import problems.acopf.problem as _problem_mod
+
+# Pyomo's res.solver.time (surfaced as result["solver_time_s"]) is the wall
+# time of the WHOLE `ipopt` invocation via the ASL file interface: it includes
+# writing the NL file, launching/tearing down the subprocess, and reading
+# results back -- overhead that is roughly FIXED per call and dominates on
+# small problems (measured ~10ms on case9, vs ~3ms of actual IPOPT iteration).
+# To get IPOPT's true internal solve time, ask it to print its own timing
+# breakdown (only possible at print_level>=1; production runs use
+# print_level=0, so this must be enabled here) and parse it out of a captured
+# copy of its stdout. This is used ONLY by this benchmarking script -- it does
+# not touch problems/acopf/problem.py's solve_local, which stays at
+# print_level=0 (quiet) for actual data generation and training.
+_IPOPT_TIME_RE = re.compile(
+    r"Total seconds in (?:IPOPT \(w/o function evaluations\)|NLP function evaluations)"
+    r"\s*=\s*([\d.]+)")
+
+
+def _solve_local_capture_ipopt_time(p, args):
+    """Call solve_local with IPOPT's timing statistics enabled, returning
+    (cost, res, ipopt_internal_s) where the third value is None if the log
+    could not be parsed (e.g. the 'weak' solver path, which skips IPOPT)."""
+    orig_factory = pyo.SolverFactory
+
+    class _TimedWrap:
+        def __init__(self, inner):
+            self._inner = inner
+            self.options = inner.options
+
+        def solve(self, m, **kw):
+            self.options["print_timing_statistics"] = "yes"
+            self.options["print_level"] = 5
+            kw["tee"] = True
+            return self._inner.solve(m, **kw)
+
+    def _patched(name, *a, **k):
+        s = orig_factory(name, *a, **k)
+        return _TimedWrap(s) if name == "ipopt" else s
+
+    _problem_mod.pyo.SolverFactory = _patched
+    r_fd, w_fd = os.pipe()
+    saved = os.dup(1)
+    os.dup2(w_fd, 1)
+    try:
+        cost, res = solve_local(p, args=args)
+    finally:
+        os.dup2(saved, 1)
+        os.close(w_fd)
+        os.close(saved)
+        _problem_mod.pyo.SolverFactory = orig_factory
+    out = os.read(r_fd, 10 ** 7).decode(errors="replace")
+    os.close(r_fd)
+    total = sum(float(m.group(1)) for m in _IPOPT_TIME_RE.finditer(out))
+    return cost, res, (total if total > 0 else None)
 
 DATA = (PROJECT_ROOT / "data" / "acopf-hpc"
         if (PROJECT_ROOT / "data" / "acopf-hpc").exists()
@@ -111,16 +168,21 @@ def _time_relaxation(X, args, cache_key, n):
 
 
 def _time_local(X, args, net, n):
-    """Return (mean IPOPT-only s, mean end-to-end s, mean warm-start s)."""
+    """Return (mean IPOPT-internal s, mean ASL-invocation s, mean end-to-end s,
+    mean warm-start s). IPOPT-internal is the true algorithmic time (parsed
+    from IPOPT's own timing log); ASL-invocation is Pyomo's res.solver.time,
+    which additionally includes NL-file I/O and subprocess launch overhead --
+    reported alongside so the gap between the two is visible, not hidden."""
     import pandapower as pp
-    solver_ts, total_ts, warm_ts = [], [], []
+    ipopt_ts, asl_ts, total_ts, warm_ts = [], [], [], []
     n_load = len(net.load)
     for _ in range(n):
         p = X[np.random.randint(len(X))]
         t0 = time.perf_counter()
-        _, res = solve_local(p, args=args)
+        _, res, ipopt_s = _solve_local_capture_ipopt_time(p, args)
         total_ts.append(time.perf_counter() - t0)
-        solver_ts.append(res.get("solver_time_s") if isinstance(res, dict) else None)
+        ipopt_ts.append(ipopt_s)
+        asl_ts.append(res.get("solver_time_s") if isinstance(res, dict) else None)
         # isolate the pandapower power-flow warm start (part of the overhead)
         try:
             netc = copy.deepcopy(net)
@@ -131,7 +193,7 @@ def _time_local(X, args, net, n):
             warm_ts.append(time.perf_counter() - t1)
         except Exception:
             warm_ts.append(None)
-    return _agg(solver_ts), _agg(total_ts), _agg(warm_ts)
+    return _agg(ipopt_ts), _agg(asl_ts), _agg(total_ts), _agg(warm_ts)
 
 
 def time_acopf(case, relax, n):
@@ -150,30 +212,36 @@ def time_acopf(case, relax, n):
     build_s = time.perf_counter() - t0
 
     relax_solve, relax_total = _time_relaxation(X, args, relax, n)
-    local_solve, local_total, warm_s = _time_local(X, args, net, n)
+    local_ipopt, local_asl, local_total, warm_s = _time_local(X, args, net, n)
 
     cfg = f"acopf_{relax}_{case}"
     out = RESULTS / cfg / "solve_times.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "key": cfg, "n_timed": n,
-        # headline: solver-internal time on both sides
+        # headline: TRUE solver-internal time on both sides (cvxpy solver_stats
+        # vs IPOPT's own timing-statistics log, not Pyomo's ASL-invocation time)
         "mean_relax_solve_s": relax_solve,
-        "mean_local_solve_s": local_solve,
+        "mean_local_solve_s": local_ipopt,
         # context
+        "mean_local_asl_invoke_s": local_asl,
         "mean_relax_total_s": relax_total,
         "mean_local_total_s": local_total,
         "mean_local_warmstart_s": warm_s,
         "relax_first_build_s": build_s,
-        "note": ("solve_s = solver-only: cvxpy solver_stats.solve_time vs Pyomo "
-                 "res.solver.time (the latter includes NL I/O + process launch, so it "
-                 "upper-bounds IPOPT's internal time); total_s = end-to-end including "
-                 "modelling/canonicalization, power-flow warm start and subprocess"),
+        "note": ("solve_s = TRUE solver-internal time: cvxpy solver_stats.solve_time vs "
+                 "IPOPT's own 'Total seconds in IPOPT' timing log (print_level bumped for "
+                 "this measurement only). asl_invoke_s = Pyomo's res.solver.time, which "
+                 "additionally includes NL-file I/O and subprocess launch -- a roughly "
+                 "fixed per-call overhead that dominates on small problems (e.g. ~10ms "
+                 "extra on case9's ~3ms solve) and is diluted on large ones; reported "
+                 "separately rather than folded into solve_s. total_s = end-to-end "
+                 "including modelling/canonicalization, power-flow warm start and subprocess."),
     }
     out.write_text(json.dumps(payload, indent=2))
-    print(f"{cfg:32s} SOLVER relax={relax_solve:8.4f}s local={local_solve:8.4f}s  |  "
-          f"TOTAL relax={relax_total:7.3f}s local={local_total:7.3f}s "
-          f"(pf warm start {warm_s:.3f}s)", flush=True)
+    print(f"{cfg:32s} SOLVER relax={relax_solve:8.4f}s local={local_ipopt:8.4f}s "
+          f"(asl-invoke={local_asl:.4f}s)  |  TOTAL relax={relax_total:7.3f}s "
+          f"local={local_total:7.3f}s (pf warm start {warm_s:.3f}s)", flush=True)
 
 
 def time_knapsack(n):
