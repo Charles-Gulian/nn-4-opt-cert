@@ -131,6 +131,10 @@ def _standard_row(exp, relax, case, key, kind, delta_frac, level):
         pct_infeasible=100.0 * (1 - len(d0) / 5000.0),
         mean_relax_gap=np.nanmean(vt0 - v),
         mae=np.nanmean(err), q_offset=np.mean(list(q.values())),
+        # unambiguous fields for the v_r / v / f side-by-side table: mean_v
+        # above is v_r EXCEPT in _knapsack_corr_row, where it is v_true --
+        # these three are always the same quantity regardless of row kind.
+        mean_vr=np.nanmean(v), mean_vtrue=np.nanmean(vt0), mean_f=np.nanmean(f),
     )
     opt_gap = f - vt0
     cc = _cert_counts(g_by_fold, f, vt0, q, delta)
@@ -169,7 +173,11 @@ def _knapsack_corr_row(exp, relax, case, key, kind, delta_frac, level):
                pct_infeasible=0.0,
                mean_relax_gap=float(np.mean(y - vstar)),
                mae=float(np.mean(np.abs(d["g"].values - d["v"].values))),
-               q_offset=float(q))
+               q_offset=float(q),
+               # unambiguous fields (see _standard_row): here mean_v above is
+               # v_true (not v_r), so mean_vr/mean_vtrue must NOT reuse it blindly.
+               mean_vr=float(np.mean(y)), mean_vtrue=float(np.mean(vstar)),
+               mean_f=float(np.mean(f_g)))
 
     truth = (vstar - f_g) <= delta
     tp = fp = tn = fn = 0.0

@@ -1,21 +1,50 @@
-"""Emit the three consolidated results tables as LaTeX (booktabs + multirow),
-matching table mockup.xlsx. Reads results/table_{offline,online,timing}.csv,
-writes results/tables_generated.tex (\\input-able / paste-able into the paper).
+"""Emit the paper's three results tables as LaTeX (booktabs + multirow).
+
+Reads results/table_{offline,online,timing}.csv (written by
+compute_final_tables.py) and writes results/tables_generated.tex,
+paste-able directly into NN4OPT_TMLR/main-rewrite.tex in place of the
+existing \\begin{table}...\\end{table} blocks for tab:offline/tab:online/
+tab:timing (labels match, so in-text \\ref's keep working unchanged).
+
+Column format (offline/online), approved 2026-08-24: drop the old grouped
+headers (Data Generation/Convexification/Training/Calibration/Deployment)
+and the old std/pct-infeasible/relax-gap/opt-gap columns, in favor of the
+paper's own v_r/v/f notation directly:
+    Table 2 (offline): v_r(theta) | v(theta) | f(x_hat;theta) | MAE | q_99
+    Table 3 (online):  delta | TP | FP | TN | FN
+Table 4 (timing) is unchanged from the original format.
 
 Usage:  python scripts/emit_latex_tables.py
 """
-import json
 import pathlib
+import sys
+
 import numpy as np
 import pandas as pd
 
 RESULTS = pathlib.Path(__file__).resolve().parents[1] / "results"
-_meta_path = RESULTS / "table_meta.json"
-META = json.loads(_meta_path.read_text()) if _meta_path.exists() else {
-    "delta_frac": 0.01, "alpha": 0.01, "level": 0.99}
-QL = int(round(META["level"] * 100))        # offset subscript, e.g. 95
-DPCT = f"{META['delta_frac']*100:.0f}\\%"    # escaped for LaTeX
-APCT = f"{META['alpha']*100:.0f}\\%"
+
+# Rows to include, in display order (knapsack: n=20000 correlated-mu rows
+# only, per the "drop 80k from the main tables for now" decision).
+KEEP = [
+    ("QCQP", "Shor", None),
+    ("Inverse Kinematics", "Shor", None),
+    ("Inverse Kinematics", "Lasserre-2", None),
+    ("MIMO Detection", "Shor", None),
+    ("AC-OPF", "SOCP", "case9"), ("AC-OPF", "SOCP", "case14"),
+    ("AC-OPF", "SOCP", "case39"), ("AC-OPF", "SOCP", "case89pegase"),
+    ("AC-OPF", "SOCP", "case118"), ("AC-OPF", "SOCP", "case300"),
+    ("AC-OPF", "SOCP", "case1354pegase"), ("AC-OPF", "SOCP", "case2869pegase"),
+    ("AC-OPF", "SDP", "case9"), ("AC-OPF", "SDP", "case14"),
+    ("AC-OPF", "SDP", "case39"), ("AC-OPF", "SDP", "case89pegase"),
+    ("AC-OPF", "SDP", "case118"), ("AC-OPF", "SDP", "case300"),
+    ("AC-OPF", "SDP", "case1354pegase"),
+    ("Robust Knapsack", "Exact", "n=20000"), ("Robust Knapsack", "SOCP", "n=20000"),
+]
+RENAME_EXP = {"Robust Knapsack (corr.)": "Robust Knapsack"}
+DISPLAY_CASE = {("Robust Knapsack", "Exact", "n=20000"): "n=25",
+                 ("Robust Knapsack", "SOCP", "n=20000"): "n=25"}
+SCI_THRESHOLD = 1e-3   # |x| below this -> scientific notation (e.g. IK's q_99)
 
 
 def num(x, blank="--"):
@@ -29,118 +58,131 @@ def num(x, blank="--"):
         return f"{x:,.0f}"
     if ax >= 1:
         return f"{x:.3g}"
+    if ax < SCI_THRESHOLD:
+        return f"{x:.1e}"
     return f"{x:.2g}"
 
 
 def sec(x):
-    """Solve time in s / ms."""
+    """Solve time in s / ms (unchanged from the original timing table)."""
     if x is None or (isinstance(x, float) and not np.isfinite(x)):
         return "--"
     return f"{x*1e3:.3g} ms" if x < 1 else f"{x:.3g} s"
 
 
 def _texcase(c):
-    return "" if not c or (isinstance(c, float) and not np.isfinite(c)) else rf"\texttt{{{c}}}"
+    return "" if not c else rf"\texttt{{{c}}}"
 
 
-def _body(df, cell_fns):
-    """Rows with \\multirow on the Experiment column + midrules between groups."""
+def _load(name):
+    df = pd.read_csv(RESULTS / f"table_{name}.csv", keep_default_na=True, na_values=[""])
+    df["relaxation"] = df["relaxation"].fillna("None").astype(str)
+    df["experiment"] = df["experiment"].replace(RENAME_EXP)
+    df["case"] = df["case"].fillna("")
+    rows = []
+    for exp, relax, case in KEEP:
+        sub = df[(df["experiment"] == exp) & (df["relaxation"] == relax)
+                 & (df["case"].fillna("") == (case or ""))]
+        if len(sub) != 1:
+            print(f"  MISSING/dup in {name}: {exp}/{relax}/{case} ({len(sub)} matches)",
+                  file=sys.stderr)
+            continue
+        r = sub.iloc[0].to_dict()
+        r["case"] = DISPLAY_CASE.get((exp, relax, case), case)
+        rows.append(r)
+    return rows
+
+
+def _grouped_body(rows, cell_fn):
     out = []
-    exps = df["experiment"].tolist()
-    # group consecutive identical experiments
-    groups = []
     i = 0
-    while i < len(exps):
+    while i < len(rows):
         j = i
-        while j < len(exps) and exps[j] == exps[i]:
+        while j < len(rows) and rows[j]["experiment"] == rows[i]["experiment"]:
             j += 1
-        groups.append((i, j))
-        i = j
-    for (a, b) in groups:
-        for r in range(a, b):
-            row = df.iloc[r]
-            exp_cell = (rf"\multirow{{{b-a}}}{{*}}{{{row['experiment']}}}" if r == a else "")
-            case = _texcase(row.get("case", ""))
-            cells = [fn(row) for fn in cell_fns]
-            out.append("  " + " & ".join([exp_cell, row["relaxation"], case] + cells) + r" \\")
+        for k in range(i, j):
+            r = rows[k]
+            exp_cell = rf"\multirow{{{j-i}}}{{*}}{{{r['experiment']}}}" if k == i else ""
+            out.append("  " + " & ".join(
+                [exp_cell, r["relaxation"], _texcase(r["case"])] + cell_fn(r)) + r" \\")
         out.append(r"\midrule")
+        i = j
     if out and out[-1] == r"\midrule":
         out.pop()
     return "\n".join(out)
 
 
-def offline_table(df):
-    fns = [lambda r: num(r["mean_v"]), lambda r: num(r["std_v"]),
-           lambda r: num(r["mean_relax_gap"]),
-           lambda r: num(r["mae"]), lambda r: num(r["q_offset"])]
+def offline_table(rows):
+    def cells(r):
+        # AC-OPF is nonconvex and generally intractable to solve exactly, so
+        # v(theta) is NEVER genuinely available there (only relaxation
+        # values of varying tightness stand in for it) -- blank rather than
+        # show a relaxation value under a v(theta) header.
+        vtrue_cell = "--" if r["experiment"] == "AC-OPF" else num(r["mean_vtrue"])
+        return [num(r["mean_vr"]), vtrue_cell, num(r["mean_f"]),
+                num(r["mae"]), num(r["q_offset"])]
     return rf"""\begin{{table}}[t]
 \centering\footnotesize
-\caption{{Offline results (data generation, convexification, training, and split-conformal
-calibration), averaged over the four folds. ${{}}^\ast$If $v(\bm{{\theta}})$ is intractable we
-use the relaxation value $v_r(\bm{{\theta}})$ for the mean, std, and relaxation gap.}}
+\caption{{Offline results, averaged over the four folds. ${{}}^\ast$AC-OPF is nonconvex and
+generally intractable to solve exactly, so genuine $v(\bm\theta)$ is never available there
+(only relaxation values of varying tightness); shown as --.}}
 \label{{tab:offline}}
-\begin{{tabular}}{{lll rr r r r}}
+\begin{{tabular}}{{lll rrr rr}}
 \toprule
-& & & \multicolumn{{2}}{{c}}{{Data Generation}} & Convexification & Training & Calibration \\
-\cmidrule(lr){{4-5}}\cmidrule(lr){{6-6}}\cmidrule(lr){{7-7}}\cmidrule(lr){{8-8}}
 \textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
-Mean $v^\ast$ & Std $v^\ast$ & Relax.\ Gap$^\ast$ & MAE & $q_{{{QL}}}$ \\
+$\bar v_r(\bm\theta)$ & $\bar v(\bm\theta)^\ast$ & $\bar f(\hat{{\mathbf{{x}}}};\bm\theta)$ &
+MAE & $q_{{99}}$ \\
 \midrule
-{_body(df, fns)}
+{_grouped_body(rows, cells)}
 \bottomrule
 \end{{tabular}}
 \end{{table}}"""
 
 
-def online_table(df):
-    fns = [lambda r: num(r["mean_opt_gap"]), lambda r: num(r["worst_opt_gap"]),
-           lambda r: f"{int(r['TP'])}", lambda r: f"{int(r['FP'])}",
-           lambda r: f"{int(r['TN'])}", lambda r: f"{int(r['FN'])}"]
+def online_table(rows):
+    def cells(r):
+        return [num(r["delta"]), f"{int(round(r['TP']))}", f"{int(round(r['FP']))}",
+                f"{int(round(r['TN']))}", f"{int(round(r['FN']))}"]
     return rf"""\begin{{table}}[t]
 \centering\footnotesize
-\caption{{Online (deployment) results at $\delta = {DPCT}\cdot\mathrm{{std}}(v(\bm{{\theta}}))$ and
-$\alpha = {APCT}$ (offset $q_{{{QL}}}$), averaged over the four folds. ${{}}^\ast$Optimality gap uses
-$v(\bm{{\theta}})$ where tractable, else $v_r(\bm{{\theta}})$.}}
+\caption{{Online (deployment) results at $\delta = 3\%\cdot\mathrm{{std}}(v(\bm{{\theta}}))$ and
+$\alpha = 1\%$ (offset $q_{{99}}$), averaged over the four folds.}}
 \label{{tab:online}}
-\begin{{tabular}}{{lll rr rrrr}}
+\begin{{tabular}}{{lll r rrrr}}
 \toprule
-& & & \multicolumn{{6}}{{c}}{{Deployment}} \\
-\cmidrule(lr){{4-9}}
 \textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
-Mean Gap$^\ast$ & Worst Gap$^\ast$ & TP & FP & TN & FN \\
+$\delta$ & TP & FP & TN & FN \\
 \midrule
-{_body(df, fns)}
+{_grouped_body(rows, cells)}
 \bottomrule
 \end{{tabular}}
 \end{{table}}"""
 
 
-def timing_table(df):
-    fns = [lambda r: sec(r["relax_solve_s"]), lambda r: sec(r["local_solve_s"])]
+def timing_table(rows):
+    def cells(r):
+        return [sec(r["relax_solve_s"]), sec(r["local_solve_s"])]
     return rf"""\begin{{table}}[t]
 \centering\footnotesize
-\caption{{Mean solve times: the convex relaxation (offline) vs.\ the fast local solver.
-Higher-order relaxations are consistently slower.}}
+\caption{{Mean solve times: the convex relaxation (offline) vs.\ the fast local solver.}}
 \label{{tab:timing}}
 \begin{{tabular}}{{lll rr}}
 \toprule
 \textbf{{Experiment}} & \textbf{{Relaxation}} & \textbf{{Case}} &
 Relaxation Solve & Local Solve \\
 \midrule
-{_body(df, fns)}
+{_grouped_body(rows, cells)}
 \bottomrule
 \end{{tabular}}
 \end{{table}}"""
 
 
 def main():
-    kw = dict(keep_default_na=True, na_values=[""])   # keep "None" as a string
-    off = pd.read_csv(RESULTS / "table_offline.csv", **kw)
-    onl = pd.read_csv(RESULTS / "table_online.csv", **kw)
-    tim = pd.read_csv(RESULTS / "table_timing.csv", **kw)
-    for df in (off, onl, tim):
-        df["relaxation"] = df["relaxation"].fillna("None").astype(str)
-    tex = "\n\n".join([offline_table(off), online_table(onl), timing_table(tim)])
+    off_rows = _load("offline")
+    onl_rows = _load("online")
+    tim_rows = _load("timing")
+    tex = "\n\n".join([offline_table(off_rows), online_table(onl_rows),
+                       timing_table(tim_rows)])
     out = RESULTS / "tables_generated.tex"
     out.write_text(tex + "\n")
     print(f"wrote {out}")
