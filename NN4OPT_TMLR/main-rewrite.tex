@@ -790,7 +790,7 @@ whose $2^n$ feasible points (the candidate transmitted signals) are all local mi
 
 We convexify problem \cref{prob:MIMO}{}{} via semidefinite relaxation (i.e., the Shor or Lasserre-1 relaxation). We introduce the lifted matrix variable $Y$ such that $Y$ is symmetric positive semidefinite and $Y_{ij}$ replaces $x_i x_j$. We therefore require that $Y_{ii} = 1$ for all $i \in \{1, \dots n\}$ in the constraints.
 
-We fix a random channel matrix with $m = 4$, $n = 2$, sample transmitted signals $x \in \{-1, +1\}^n$ uniformly with noise variance $\sigma^2 = 0.1$, and obtain feasible solutions with a fast zero-forcing detector (a linear pseudo-inverse of $H$ followed by rounding). MIMO detection is among the hardest of our value functions to learn: because the parameter is the noisy received signal, $v(\bm{\theta})$ jumps as $\bm{\theta}$ crosses the maximum-likelihood decision boundaries between candidate signals, so the target is rough rather than smooth. The network's prediction error is consequently large relative to the small spread of the optimal value, which makes the certificate conservative for this problem and results in a high false negative rate. We return to this in Section~\ref{sec:discussion}.
+We fix a random channel matrix with $m = 4$, $n = 2$, sample transmitted signals $x \in \{-1, +1\}^n$ uniformly with noise variance $\sigma^2 = 0.1$, and obtain feasible solutions with a fast zero-forcing detector (a linear pseudo-inverse of $H$ followed by rounding). Because $v(\bm{\theta})$ is a minimum over the $2^n$ candidate signals, it is continuous but has kinks at the maximum-likelihood decision boundaries where the arg-min switches, making it a comparatively rough target relative to our other experiments, and the network's prediction error is correspondingly larger relative to the small spread of the optimal value. Despite this, our fixed channel is well-conditioned and over-determined ($m=4$ measurements for $n=2$ unknowns; condition number $\approx 1.9$), so the zero-forcing detector recovers the exact maximum-likelihood solution on over $99.9\%$ of test instances, and the network's prediction error remains small enough that the certificate fires on nearly all of them (Table~\ref{tab:combined}).
 
 \subsection{Power Systems Optimization: AC Optimal Power Flow}
 \label{subsec:acopf-experiment}
@@ -1087,7 +1087,7 @@ Because the value function of a combinatorial problem is comparatively hard to l
 
 \subsection{Results}
 
-Table~\ref{tab:combined} reports all results at the fixed operating point $\delta = 3\% \times\mathrm{std.\,}v(\bm{\theta})$ and $\alpha = 0.01$. The offline columns give the mean relaxation value $\bar v_r(\bm\theta)$ the network is trained to predict, the mean true optimal value $\bar v(\bm\theta)$ where tractable, the mean value $\bar f(\hat{\mathbf{x}};\bm\theta)$ achieved by the fast local solver, the network's mean absolute error, and the calibrated conformal offset $\hat q_{99}$ -- the gap between $\bar v_r$ and $\bar v$ is the relaxation gap, and the gap between $\bar f$ and $\bar v$ (or $\bar v_r$, where $\bar v$ is unavailable) is the local solver's mean optimality gap. The online columns give the certification threshold $\delta$ used and the resulting certification counts. Across every experiment the false positive rate is near-zero or close to the $1\%$ target, while the number of certified optima (TP) is high wherever the network is accurate enough that $\hat{q}_{99}$ fits within $\delta$ (AC-OPF, inverse kinematics, QCQP), and low where it is not (MIMO detection, and to a lesser extent robust knapsack), whose rougher value functions the network fits less precisely. The timing columns show the offline solve cost: higher-order relaxations are consistently, and often dramatically, slower, and increasingly so as the system grows---on AC-OPF the chordal SDP costs under $3\times$ the SOCP on \texttt{case9} but is $19$--$107\times$ slower on \texttt{case118}--\texttt{case89pegase}, remaining over $40\times$ slower even on the much larger \texttt{case1354pegase}---whereas a network prediction is sub-microsecond. The local solver, by contrast, does not show a comparably clean scaling trend relative to the SOCP relaxation; we caution against over-reading this comparison given the sample size.
+Table~\ref{tab:combined} reports all results at the fixed operating point $\delta = 3\% \times\mathrm{std.\,}v(\bm{\theta})$ and $\alpha = 0.01$. The offline columns give the mean relaxation value $\bar v_r(\bm\theta)$ the network is trained to predict, the mean true optimal value $\bar v(\bm\theta)$ where tractable, the mean value $\bar f(\hat{\mathbf{x}};\bm\theta)$ achieved by the fast local solver, the network's mean absolute error, and the calibrated conformal offset $\hat q_{99}$ -- the gap between $\bar v_r$ and $\bar v$ is the relaxation gap, and the gap between $\bar f$ and $\bar v$ (or $\bar v_r$, where $\bar v$ is unavailable) is the local solver's mean optimality gap. The online columns give the certification threshold $\delta$ used and the resulting certification counts. Across every experiment the false positive rate is near-zero or close to the $1\%$ target, while the number of certified optima (TP) is high wherever the network is accurate enough that $\hat{q}_{99}$ fits within $\delta$ (AC-OPF, inverse kinematics, QCQP, and MIMO detection, whose zero-forcing detector is near-ML-optimal for this well-conditioned, over-determined channel and is therefore certified almost everywhere), and low for robust knapsack, whose combinatorial (rather than smooth) value function the network fits comparatively less precisely. The timing columns show the offline solve cost: higher-order relaxations are consistently, and often dramatically, slower, and increasingly so as the system grows---on AC-OPF the chordal SDP costs under $3\times$ the SOCP on \texttt{case9} but is $19$--$107\times$ slower on \texttt{case118}--\texttt{case89pegase}, remaining over $40\times$ slower even on the much larger \texttt{case1354pegase}---whereas a network prediction is sub-microsecond. The local solver, by contrast, does not show a comparably clean scaling trend relative to the SOCP relaxation; we caution against over-reading this comparison given the sample size.
 
 \begin{sidewaystable}[p]
 \centering\footnotesize
@@ -1129,7 +1129,7 @@ Relax.\ Solve & Local Solve \\
   \multirow{2}{*}{Inverse Kinematics} & Shor &  & 0.036 & 0.039 & 0.05 & 7.7e-05 & 5.5e-04 & 0.0028 & 4533 & 0 & 193 & 267 & 0.36 ms & 12.4 ms \\
    & Lasserre-2 &  & 0.039 & 0.039 & 0.05 & 8.4e-05 & 5.3e-04 & 0.0028 & 4799 & 0 & 193 & 1 & 34.5 ms & 12.4 ms \\
 \midrule
-  \multirow{1}{*}{MIMO Detection} & Shor &  & 0.79 & 0.79 & 0.8 & 0.002 & 0.0071 & 0.012 & 96 & 0 & 4 & 4900 & 92.8 ms & 0.14 ms \\
+  \multirow{1}{*}{MIMO Detection} & Shor &  & 0.79 & 0.79 & 0.8 & 0.002 & 0.0071 & 0.012 & 4811 & 0 & 4 & 185 & 92.8 ms & 0.14 ms \\
 \midrule
   \multirow{16}{*}{AC-OPF} & SOCP & \texttt{case9} & 4,692 & -- & 4,692 & 0.72 & 2.79 & 43.6 & 5000 & 0 & 0 & 0 & 1.80 ms & 4.40 ms \\
    & SOCP & \texttt{case14} & 7,049 & -- & 7,054 & 2.82 & 17.5 & 57.2 & 4999 & 0 & 0 & 1 & 0.60 ms & 3.60 ms \\
@@ -1148,8 +1148,8 @@ Relax.\ Solve & Local Solve \\
    & SDP & \texttt{case1354pegase} & 67,693 & -- & 67,699 & 4.85 & 19.4 & 398 & 3844 & 0 & 0 & 0 & 8.28 s & 247 ms \\
    & SDP & \texttt{case2869pegase} & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 40.3 s\textsuperscript{$\dagger$} & 467 ms \\
 \midrule
-  \multirow{2}{*}{Robust Knapsack} & Exact & \texttt{n=25} & 281 & 281 & 272 & 1.23 & 3.96 & 1.41 & 50 & 4 & 4238 & 708 & -- & 0.0687 ms \\
-   & SOCP & \texttt{n=25} & 283 & 281 & 272 & 1.16 & 3.66 & 1.41 & 7 & 1 & 4241 & 751 & -- & 0.0687 ms \\
+  \multirow{2}{*}{Robust Knapsack} & Exact & \texttt{n=25} & 281 & 281 & 272 & 1.23 & 3.96 & 1.41 & 50 & 4 & 4238 & 708 & 41.0 ms & 0.0687 ms \\
+   & SOCP & \texttt{n=25} & 283 & 281 & 272 & 1.16 & 3.66 & 1.41 & 7 & 1 & 4241 & 751 & 0.68 ms & 0.0687 ms \\
 \bottomrule
 \end{tabular}%
 }
@@ -1161,8 +1161,7 @@ Relax.\ Solve & Local Solve \\
 Our results indicate that our framework achieves its intended purpose of probabilistically certifying global optima in non-convex optimization problems.
 In experiments where the deep neural network learns to approximate the value function with high accuracy, it can certify global optima at or below the target 
 false positive rate of $1\%$ within only a few percent of the intrinsic spread of the target optimal value.
-For problems with more challenging value functions, the certification accuracy improves with larger training data -- illustrating the
-``preservation of difficulty'' of certain NP-hard problems.
+For robust knapsack, whose parameter enters the feasible set rather than the objective, the optimal value has genuine argmax-switching discontinuities in $\bm\theta$, and we find the resulting certification-accuracy floor to be irreducible: it does not improve with $4\times$ more training data or $5\times$ more network capacity (Appendix~\ref{app:ablation}), illustrating a ``preservation of difficulty'' for this class of combinatorial problems that no amount of offline compute closes.
 As a feedforward pass through the neural network takes only milliseconds, the certificates may be deployed to assist fast solvers
 (including local search methods, heuristics, or machine learning-based solvers) in real-time settings.
 
@@ -1277,6 +1276,38 @@ our chosen budget. Train time is for \texttt{case1354} (seconds, all four folds)
 \end{tabular}
 \end{table}
 
+\subsection{Robust Knapsack: Data-Size and Capacity Ablation}
+
+Unlike the smooth-in-$\bm\theta$ problems above, robust knapsack's optimal value has genuine
+argmax-switching discontinuities in $\bm\theta$ (Section~\ref{sec:discussion}), so we separately
+ablate whether more training data or a larger network closes the resulting certification-accuracy
+gap. Table~\ref{tab:knapsack-ablation} reports $\hat q_{99}/\mathrm{std}(v^\ast)$ -- the calibrated
+conformal offset as a fraction of the optimal value's spread, the quantity that determines how
+tight a certification threshold $\delta$ can be -- for the exact-MISOCP target ($6\times256$
+network, our default architecture throughout the paper) at $20$k and $80$k training instances, and
+for two larger architectures at $20$k instances. Neither a $4\times$ increase in training data nor
+a $5\times$ increase in parameter count meaningfully reduces $\hat q_{99}/\mathrm{std}(v^\ast)$,
+consistent with an irreducible floor set by the discontinuities themselves rather than by
+insufficient data or network capacity.
+
+\begin{table}[h]
+\centering\footnotesize
+\caption{Robust knapsack (correlated-$\bm\mu$, exact-MISOCP target) data-size and capacity
+ablation: $4$-fold cross-validated $\hat q_{99}/\mathrm{std}(v^\ast)$. Neither more data
+(first two rows) nor more capacity (last two rows, at $20$k instances) closes the gap.}
+\label{tab:knapsack-ablation}
+\begin{tabular}{c c c}
+\toprule
+\textbf{Training instances} & \textbf{Architecture} & $\hat q_{99}/\mathrm{std}(v^\ast)$ \\
+\midrule
+  $20$k & $6\times256$ (default) & $0.0845$ \\
+  $80$k & $6\times256$ & $0.0848$ \\
+\midrule
+  $20$k & $6\times512$ & $0.0818$ \\
+  $20$k & $8\times512$ & $0.0831$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 
 % \section{Additional Background} \label{sec:additional_background}
