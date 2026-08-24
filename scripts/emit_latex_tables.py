@@ -164,7 +164,12 @@ def combined_table(off_rows, onl_rows, tim_rows):
 \caption{{All results combined, at the fixed operating point $\delta = 3\%\cdot\mathrm{{std}}(v(\bm\theta))$
 and $\alpha = 1\%$ (offset $q_{{99}}$), averaged over the four folds. ${{}}^\ast$AC-OPF is nonconvex and
 generally intractable to solve exactly, so genuine $v(\bm\theta)$ is never available there (only
-relaxation values of varying tightness); shown as --. Timing: both columns of a given row are
+relaxation values of varying tightness); shown as --. SOCP and SDP rows for the same AC-OPF
+case are restricted to the subset of instances on which both relaxations converged, so the two
+rows describe the identical test population (their $\bar f(\hat{{\mathbf{{x}}}};\bm\theta)$ is
+therefore always equal, and $\bar v_r$ is guaranteed SDP $\geq$ SOCP, as the relaxation hierarchy
+requires); this affects only \texttt{{case89pegase}}/\texttt{{case300}}/\texttt{{case1354pegase}}, where
+the two relaxations fail to converge on different instances. Timing: both columns of a given row are
 measured identically (like-for-like); the local solver does not depend on the relaxation it is
 compared against, so its solve time is measured once per experiment (per AC-OPF case; once for
 inverse kinematics) and reused across relaxation rows. For AC-OPF, whose local solver (IPOPT) is

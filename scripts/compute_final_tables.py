@@ -71,6 +71,49 @@ def _pred_dir(key):
     return p if (p / "fold_test_predictions.csv").exists() else RESULTS / "acopf-cert" / key
 
 
+ACOPF_RAW_DIR = (DATA / "acopf-hpc" if (DATA / "acopf-hpc").exists() else DATA / "acopf")
+
+
+def _acopf_own_feasible_mask(case, relax_key):
+    """The exact per-instance feasibility mask evaluate_certify.py applies
+    when building fold_test_predictions.csv (isfinite Cost & LocalCost),
+    computed on the RAW test CSV so it is indexed by ORIGINAL row position
+    (0..4999, shared theta order across relaxations) rather than the
+    post-filter 0..n-1 reindex that fold_test_predictions.csv itself uses."""
+    raw = pd.read_csv(ACOPF_RAW_DIR / f"test_5000_{relax_key}_{case}.csv")
+    v = pd.to_numeric(raw["Cost"], errors="coerce").values
+    f = pd.to_numeric(raw["LocalCost"], errors="coerce").values
+    return np.isfinite(v) & np.isfinite(f)
+
+
+def _acopf_keep_in_own_order(case, own_relax_key, other_relax_key):
+    """Boolean array, in THIS relaxation's own post-filter row order (same
+    order fold_test_predictions.csv uses), marking which of its own retained
+    rows are ALSO feasible for the paired relaxation on the SAME case.
+
+    WHY: SOCP and SDP each independently drop their own infeasible rows and
+    reset to a fresh 0..n-1 index (evaluate_certify.py), discarding which
+    original theta each row is. When the two relaxations fail on different
+    instances (case89pegase/case300/case1354pegase; verified NOT the case for
+    case9/14/39/118, where the feasible SETS are identical), "row i" in the
+    SOCP file and "row i" in the SDP file are in general different theta --
+    so directly comparing/averaging v_r or f across the two relaxation rows
+    silently mixes non-comparable populations (this produced the impossible
+    SDP-v_r < SOCP-v_r and the SOCP/SDP f mismatch). Restricting both rows to
+    the shared-feasible subset (this function) before computing any
+    statistic makes the two rows describe the exact same test population.
+    Returns None if there's nothing to intersect against (e.g.
+    case2869pegase has no chordal-SDP data at all).
+    """
+    try:
+        own_mask = _acopf_own_feasible_mask(case, own_relax_key)
+        other_mask = _acopf_own_feasible_mask(case, other_relax_key)
+    except FileNotFoundError:
+        return None
+    shared = own_mask & other_mask
+    return shared[own_mask]   # length == own_mask.sum(), in own post-filter order
+
+
 def _truth(kind, key, d):
     """v(theta) aligned & pooled to match the (fold-pooled) predictions frame d."""
     if kind in ("self", "acopf_chordal"):
@@ -117,18 +160,39 @@ def _standard_row(exp, relax, case, key, kind, delta_frac, level):
     d = pd.read_csv(_pred_dir(key) / "fold_test_predictions.csv")
     d0 = d[d["fold"] == 0]
     v = d0["v"].values; f = d0["f"].values
-    v_true = _truth(kind, key, d)
-    vt0 = v_true[:len(d0)] if kind != "self" and kind != "acopf_chordal" else v  # per-instance truth
-    # For acopf_socp/ik/mimo, v_true is pooled(4x) same order; first block == per-instance.
-    vt0 = v_true[:len(d0)]
+    v_true = _truth(kind, key, d)   # computed on the UNRESTRICTED data -- _acopf_chordal_truth
+    vt0 = v_true[:len(d0)]          # internally checks row counts against d0's own full feasible set
     g_by_fold = {k: d[d["fold"] == k]["g"].values for k in d["fold"].unique()}
+
+    # AC-OPF: restrict SOCP/SDP rows for the same case to the subset feasible
+    # for BOTH relaxations (see _acopf_keep_in_own_order), so the two rows
+    # describe the exact same test population. Without this, SOCP and SDP
+    # silently average different theta populations whenever they fail to
+    # converge on different instances (verified for case89pegase/case300/
+    # case1354pegase; the feasible SETS are identical -- not just
+    # equal-count -- for case9/14/39/118, so this is a no-op there), which
+    # produced an impossible-looking SDP-v_r < SOCP-v_r and a SOCP/SDP f
+    # mismatch despite f being literally the same local solver both times.
+    keep = None
+    if kind == "acopf_socp" and case != "case2869pegase":
+        keep = _acopf_keep_in_own_order(case, "socp", "chordal_sdp")
+    elif kind == "acopf_chordal":
+        keep = _acopf_keep_in_own_order(case, "chordal_sdp", "socp")
+    if keep is not None:
+        assert len(keep) == len(d0), f"{key}: keep len {len(keep)} != {len(d0)} rows/fold"
+        v, f, vt0 = v[keep], f[keep], vt0[keep]
+        g_by_fold = {k: g[keep] for k, g in g_by_fold.items()}
+
     q = _offsets_q(key, level)
     delta = delta_frac * np.nanstd(vt0)
-    err = np.abs(d["g"].values - d["v"].values)      # |g - v_r| pooled
+    # |g - v_r| pooled over folds, from the (possibly keep-restricted) arrays
+    # above rather than d directly, so MAE reflects the same restriction.
+    err = np.abs(np.concatenate([g_by_fold[k] for k in sorted(g_by_fold)])
+                 - np.tile(v, len(g_by_fold)))
     off = dict(
         experiment=exp, relaxation=relax, case=case,
         mean_v=np.nanmean(v), std_v=np.nanstd(v),
-        pct_infeasible=100.0 * (1 - len(d0) / 5000.0),
+        pct_infeasible=100.0 * (1 - len(d0) / 5000.0),   # this relaxation's OWN solve success rate
         mean_relax_gap=np.nanmean(vt0 - v),
         mae=np.nanmean(err), q_offset=np.mean(list(q.values())),
         # unambiguous fields for the v_r / v / f side-by-side table: mean_v
