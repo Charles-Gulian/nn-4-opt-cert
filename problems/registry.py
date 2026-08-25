@@ -171,10 +171,18 @@ def _acopf_data_dir():
     data/acopf-hpc/ (see scripts/train_acopf.py's DEFAULT_DATA_DIR). Prefer
     whichever actually contains the data so this registry works unmodified in
     both places instead of hardcoding one location.
+
+    Checked by file, not just directory existence: an old, partial prototype
+    data/acopf/ (different seed suffixes, only 3 of 8 cases) leftover from
+    early in the project sits on this laptop alongside the real data/acopf-hpc/
+    pull-back, so a bare .exists() on the directory picks the wrong (stale,
+    incomplete) one here even though it's the right check on SAVIO itself.
     """
     on_savio = PROJECT_ROOT / "data" / "acopf"
     on_laptop = PROJECT_ROOT / "data" / "acopf-hpc"
-    return on_savio if on_savio.exists() else on_laptop
+    if (on_savio / "train_20000_socp_case9.csv").exists():
+        return on_savio
+    return on_laptop
 
 
 def _acopf_spec(case, relax, n_train=20_000, n_test=5_000):

@@ -14,9 +14,19 @@ Standard problem interface:
 Parameter sampling lives in generate_data.py.
 """
 
+import pathlib
+import shutil
+import sys
+
 import numpy as np
 import cvxpy as cp
 import pyomo.environ as pyo
+
+# IPOPT binary: prefer the one co-located with the running Python interpreter
+# so we don't accidentally pick up a broken system/base-conda binary (see
+# problems/ik/problem.py, same fix).
+_PYTHON_BIN_DIR = str(pathlib.Path(sys.executable).parent)
+_IPOPT_BIN = shutil.which("ipopt", path=_PYTHON_BIN_DIR) or shutil.which("ipopt")
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +128,7 @@ def solve_local(p, args=None):
         return m.x * m.y >= 1
     model.constr = pyo.Constraint(rule=constr)
 
-    solver = pyo.SolverFactory("ipopt")
+    solver = pyo.SolverFactory("ipopt", executable=_IPOPT_BIN)
     solver.solve(model, tee=False)
 
     value = pyo.value(obj(model))

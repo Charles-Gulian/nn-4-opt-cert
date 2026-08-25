@@ -41,7 +41,14 @@ OUT = ROOT / "results" / "ablation_tables.tex"
 CASES = ["case9", "case118", "case1354pegase"]
 CLABEL = {"case9": r"\texttt{case9}", "case118": r"\texttt{case118}",
           "case1354pegase": r"\texttt{case1354}"}
+# REF_* is the center point the ORIGINAL grid varied one factor around
+# (6x256, 1000 epochs) -- kept for the width/depth-at-256/epoch tables below,
+# which are the actual runs that exist. DEFAULT_* is the adopted final
+# recipe (4x64, 1500 epochs), picked from the width table's q95 result --
+# used for the depth-at-width-64 table, which is the ablation that actually
+# matters for judging the chosen depth.
 REF_DEPTH, REF_WIDTH, REF_EPOCHS = 6, 256, 1000
+DEFAULT_WIDTH, DEFAULT_EPOCHS = 64, 1000  # depth ablation at width=64 only exists at 1000 epochs
 TIME_CASE = "case1354pegase"          # representative train-time column
 
 
@@ -135,9 +142,24 @@ def main():
         rf"Layer-\emph{{width}} ablation on AC-OPF (SOCP relaxation), at fixed depth "
         rf"${REF_DEPTH}$ and ${REF_EPOCHS}$ epochs: $4$-fold cross-validated $95$th-percentile "
         rf"overprediction of $\hat{{v}}$ above $v_r$ (\%), the certification-relevant tail "
-        rf"quantity, with MAPE in parentheses for context. Train time is for "
+        rf"quantity, with MAPE in parentheses for context. Width $64$ wins on every case on "
+        rf"this tail metric, which is why it -- not the deeper $256$-unit default this grid "
+        rf"was centered on -- is the width adopted throughout the paper. Train time is for "
         rf"\texttt{{case1354}} (seconds, all four folds).",
         "Layer width"))
+
+    tables.append(_table(
+        d, "depth", sorted(d[(d["width"] == DEFAULT_WIDTH) & (d["epochs"] == DEFAULT_EPOCHS)]["depth"].unique()),
+        {"width": DEFAULT_WIDTH, "epochs": DEFAULT_EPOCHS},
+        "tab:ablation-depth-w64",
+        rf"Network-\emph{{depth}} ablation at the \emph{{adopted}} width $64$ (SOCP relaxation, "
+        rf"${DEFAULT_EPOCHS}$ epochs): $4$-fold cross-validated $95$th-percentile overprediction "
+        rf"of $\hat{{v}}$ above $v_r$ (\%), MAPE in parentheses. Depth $5$--$6$ edge out depth $4$ "
+        rf"on this tail metric on \texttt{{case118}} ($1.74$/$1.78$ vs.\ $2.07$); we adopt depth "
+        rf"$4$ regardless as a practical plateau point with roughly $30$--$40\%$ fewer parameters "
+        rf"and comparable training cost, not as the strict per-case optimum. Train time is for "
+        rf"\texttt{{case1354}} (seconds, all four folds).",
+        "Hidden layers"))
 
     OUT.write_text("\n\n".join(tables) + "\n")
     print(f"wrote {OUT}")

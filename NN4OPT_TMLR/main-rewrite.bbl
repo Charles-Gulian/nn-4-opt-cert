@@ -7,47 +7,35 @@
 
 \bibitem[Ahmadi \& Majumdar(2016)Ahmadi and Majumdar]{ahmadi2016some}
 Amir~Ali Ahmadi and Anirudha Majumdar.
-\newblock Some applications of polynomial optimization in operations research
-  and real-time decision making.
+\newblock Some applications of polynomial optimization in operations research and real-time decision making.
 \newblock \emph{Optimization Letters}, 10:\penalty0 709--729, 2016.
 
 \bibitem[Ahmadi \& Majumdar(2019)Ahmadi and Majumdar]{ahmadi2019dsos}
 Amir~Ali Ahmadi and Anirudha Majumdar.
-\newblock Dsos and sdsos optimization: more tractable alternatives to sum of
-  squares and semidefinite optimization.
-\newblock \emph{SIAM Journal on Applied Algebra and Geometry}, 3\penalty0
-  (2):\penalty0 193--230, 2019.
+\newblock Dsos and sdsos optimization: more tractable alternatives to sum of squares and semidefinite optimization.
+\newblock \emph{SIAM Journal on Applied Algebra and Geometry}, 3\penalty0 (2):\penalty0 193--230, 2019.
 
-\bibitem[Angelopoulos \& Bates(2023)Angelopoulos and
-  Bates]{angelopoulos2023conformal}
+\bibitem[Angelopoulos \& Bates(2023)Angelopoulos and Bates]{angelopoulos2023conformal}
 Anastasios~N Angelopoulos and Stephen Bates.
 \newblock Conformal prediction: A gentle introduction.
-\newblock \emph{Foundations and Trends in Machine Learning}, 16\penalty0
-  (4):\penalty0 494--591, 2023.
+\newblock \emph{Foundations and Trends in Machine Learning}, 16\penalty0 (4):\penalty0 494--591, 2023.
 
 \bibitem[Baker(2019)]{baker2019learning}
 Kyri Baker.
 \newblock Learning warm-start points for ac optimal power flow.
-\newblock In \emph{2019 IEEE 29th International Workshop on Machine Learning
-  for Signal Processing (MLSP)}, pp.\  1--6. IEEE, 2019.
+\newblock In \emph{2019 IEEE 29th International Workshop on Machine Learning for Signal Processing (MLSP)}, pp.\  1--6. IEEE, 2019.
 
-\bibitem[Belotti et~al.(2009)Belotti, Lee, Liberti, Margot, and
-  W{\"a}chter]{belotti2009branching}
-Pietro Belotti, Jon Lee, Leo Liberti, Fran{\c{c}}ois Margot, and Andreas
-  W{\"a}chter.
+\bibitem[Belotti et~al.(2009)Belotti, Lee, Liberti, Margot, and W{\"a}chter]{belotti2009branching}
+Pietro Belotti, Jon Lee, Leo Liberti, Fran{\c{c}}ois Margot, and Andreas W{\"a}chter.
 \newblock Branching and bounds tighteningtechniques for non-convex minlp.
-\newblock \emph{Optimization Methods \& Software}, 24\penalty0 (4-5):\penalty0
-  597--634, 2009.
+\newblock \emph{Optimization Methods \& Software}, 24\penalty0 (4-5):\penalty0 597--634, 2009.
 
-\bibitem[Bertsimas \& Stellato(2022)Bertsimas and
-  Stellato]{bertsimas2022online}
+\bibitem[Bertsimas \& Stellato(2022)Bertsimas and Stellato]{bertsimas2022online}
 Dimitris Bertsimas and Bartolomeo Stellato.
 \newblock Online mixed-integer optimization in milliseconds.
-\newblock \emph{INFORMS Journal on Computing}, 34\penalty0 (4):\penalty0
-  2229--2248, 2022.
+\newblock \emph{INFORMS Journal on Computing}, 34\penalty0 (4):\penalty0 2229--2248, 2022.
 
-\bibitem[Beugnot et~al.(2023)Beugnot, Mairal, and
-  Rudi]{beugnot2023gloptinetsscalablenonconvexoptimization}
+\bibitem[Beugnot et~al.(2023)Beugnot, Mairal, and Rudi]{beugnot2023gloptinetsscalablenonconvexoptimization}
 Gaspard Beugnot, Julien Mairal, and Alessandro Rudi.
 \newblock Gloptinets: Scalable non-convex optimization with certificates, 2023.
 \newblock URL \url{https://arxiv.org/abs/2306.14932}.
@@ -61,15 +49,11 @@ Stephen Boyd and Lieven Vandenberghe.
 CAISO.
 \newblock 2023 annual report on market issues and performance.
 \newblock Annual report, California Independent System Operator, August 2024.
-\newblock URL
-  \url{https://www.caiso.com/library/market-issues-and-performance-annual-reports}.
+\newblock URL \url{https://www.caiso.com/library/market-issues-and-performance-annual-reports}.
 
-\bibitem[Dauphin et~al.(2014)Dauphin, Pascanu, Gulcehre, Cho, Ganguli, and
-  Bengio]{dauphin2014identifying}
-Yann~N Dauphin, Razvan Pascanu, Caglar Gulcehre, Kyunghyun Cho, Surya Ganguli,
-  and Yoshua Bengio.
-\newblock Identifying and attacking the saddle point problem in
-  high-dimensional non-convex optimization.
+\bibitem[Dauphin et~al.(2014)Dauphin, Pascanu, Gulcehre, Cho, Ganguli, and Bengio]{dauphin2014identifying}
+Yann~N Dauphin, Razvan Pascanu, Caglar Gulcehre, Kyunghyun Cho, Surya Ganguli, and Yoshua Bengio.
+\newblock Identifying and attacking the saddle point problem in high-dimensional non-convex optimization.
 \newblock \emph{Advances in neural information processing systems}, 27, 2014.
 
 \bibitem[Deka \& Misra(2019)Deka and Misra]{deka2019learning}
@@ -96,43 +80,32 @@ Paul~J. Goulart and Yuwen Chen.
 \bibitem[Jabr(2006)]{jabr2006radial}
 R.~A. Jabr.
 \newblock Radial distribution load flow using conic programming.
-\newblock \emph{IEEE Transactions on Power Systems}, 21\penalty0 (3):\penalty0
-  1458--1459, 2006.
+\newblock \emph{IEEE Transactions on Power Systems}, 21\penalty0 (3):\penalty0 1458--1459, 2006.
 
-\bibitem[Jiang et~al.(2024)Jiang, Wang, Wu, Wang, and
-  Lu]{jiang2024advancements}
+\bibitem[Jiang et~al.(2024)Jiang, Wang, Wu, Wang, and Lu]{jiang2024advancements}
 Bozhen Jiang, Qin Wang, Shengyu Wu, Yidi Wang, and Gang Lu.
-\newblock Advancements and future directions in the application of machine
-  learning to ac optimal power flow: a critical review.
+\newblock Advancements and future directions in the application of machine learning to ac optimal power flow: a critical review.
 \newblock \emph{Energies}, 17\penalty0 (6):\penalty0 1381, 2024.
 
-\bibitem[Kumar et~al.(2020)Kumar, Wu, Ali, Mallipeddi, Suganthan, and
-  Das]{kumar2020test}
-Abhishek Kumar, Guohua Wu, Mostafa~Z Ali, Rammohan Mallipeddi,
-  Ponnuthurai~Nagaratnam Suganthan, and Swagatam Das.
-\newblock A test-suite of non-convex constrained optimization problems from the
-  real-world and some baseline results.
+\bibitem[Kumar et~al.(2020)Kumar, Wu, Ali, Mallipeddi, Suganthan, and Das]{kumar2020test}
+Abhishek Kumar, Guohua Wu, Mostafa~Z Ali, Rammohan Mallipeddi, Ponnuthurai~Nagaratnam Suganthan, and Swagatam Das.
+\newblock A test-suite of non-convex constrained optimization problems from the real-world and some baseline results.
 \newblock \emph{Swarm and Evolutionary Computation}, 56:\penalty0 100693, 2020.
 
 \bibitem[Lasserre(2001)]{lasserre2001global}
 Jean~B Lasserre.
 \newblock Global optimization with polynomials and the problem of moments.
-\newblock \emph{SIAM Journal on optimization}, 11\penalty0 (3):\penalty0
-  796--817, 2001.
+\newblock \emph{SIAM Journal on optimization}, 11\penalty0 (3):\penalty0 796--817, 2001.
 
 \bibitem[Lavaei \& Low(2012)Lavaei and Low]{lavaei2012zero}
 Javad Lavaei and Steven~H Low.
 \newblock Zero duality gap in optimal power flow problem.
-\newblock \emph{IEEE Transactions on Power Systems}, 1\penalty0 (27):\penalty0
-  92--107, 2012.
+\newblock \emph{IEEE Transactions on Power Systems}, 1\penalty0 (27):\penalty0 92--107, 2012.
 
-\bibitem[Lei et~al.(2018)Lei, G'Sell, Rinaldo, Tibshirani, and
-  Wasserman]{lei2018distribution}
-Jing Lei, Max G'Sell, Alessandro Rinaldo, Ryan~J Tibshirani, and Larry
-  Wasserman.
+\bibitem[Lei et~al.(2018)Lei, G'Sell, Rinaldo, Tibshirani, and Wasserman]{lei2018distribution}
+Jing Lei, Max G'Sell, Alessandro Rinaldo, Ryan~J Tibshirani, and Larry Wasserman.
 \newblock Distribution-free predictive inference for regression.
-\newblock \emph{Journal of the American Statistical Association}, 113\penalty0
-  (523):\penalty0 1094--1111, 2018.
+\newblock \emph{Journal of the American Statistical Association}, 113\penalty0 (523):\penalty0 1094--1111, 2018.
 
 \bibitem[Murty \& Kabadi(1985)Murty and Kabadi]{murty1985some}
 Katta~G Murty and Santosh~N Kabadi.
@@ -141,19 +114,15 @@ Katta~G Murty and Santosh~N Kabadi.
 
 \bibitem[Pan et~al.(2022)Pan, Chen, Zhao, and Low]{pan2022deepopf}
 Xiang Pan, Minghua Chen, Tianyu Zhao, and Steven~H Low.
-\newblock Deepopf: A feasibility-optimized deep neural network approach for ac
-  optimal power flow problems.
-\newblock \emph{IEEE Systems Journal}, 17\penalty0 (1):\penalty0 673--683,
-  2022.
+\newblock Deepopf: A feasibility-optimized deep neural network approach for ac optimal power flow problems.
+\newblock \emph{IEEE Systems Journal}, 17\penalty0 (1):\penalty0 673--683, 2022.
 
 \bibitem[Park \& Van~Hentenryck(2023)Park and Van~Hentenryck]{park2023self}
 Seonho Park and Pascal Van~Hentenryck.
 \newblock Self-supervised primal-dual learning for constrained optimization.
-\newblock In \emph{Proceedings of the AAAI Conference on Artificial
-  Intelligence}, volume~37, pp.\  4052--4060, 2023.
+\newblock In \emph{Proceedings of the AAAI Conference on Artificial Intelligence}, volume~37, pp.\  4052--4060, 2023.
 
-\bibitem[Romano et~al.(2019)Romano, Patterson, and
-  Cand{\`e}s]{romano2019conformalized}
+\bibitem[Romano et~al.(2019)Romano, Patterson, and Cand{\`e}s]{romano2019conformalized}
 Yaniv Romano, Evan Patterson, and Emmanuel Cand{\`e}s.
 \newblock Conformalized quantile regression.
 \newblock \emph{Advances in Neural Information Processing Systems}, 32, 2019.
@@ -166,68 +135,51 @@ Alessandro Rudi, Ulysse Marteau-Ferey, and Francis Bach.
 \bibitem[Samuel et~al.(2017)Samuel, Diskin, and Wiesel]{samuel2017deep}
 Neev Samuel, Tzvi Diskin, and Ami Wiesel.
 \newblock Deep mimo detection.
-\newblock In \emph{2017 IEEE 18th International Workshop on Signal Processing
-  Advances in Wireless Communications (SPAWC)}, pp.\  1--5. IEEE, 2017.
+\newblock In \emph{2017 IEEE 18th International Workshop on Signal Processing Advances in Wireless Communications (SPAWC)}, pp.\  1--5. IEEE, 2017.
 
 \bibitem[Sherali \& Adams(2013)Sherali and Adams]{sherali2013reformulation}
 Hanif~D Sherali and Warren~P Adams.
-\newblock \emph{A reformulation-linearization technique for solving discrete
-  and continuous nonconvex problems}, volume~31.
+\newblock \emph{A reformulation-linearization technique for solving discrete and continuous nonconvex problems}, volume~31.
 \newblock Springer Science \& Business Media, 2013.
 
-\bibitem[Sun et~al.(2023)Sun, Huang, Christianson, Hajiesmaili, Wierman, and
-  Boutaba]{sun2023online}
-Bo~Sun, Jerry Huang, Nicolas Christianson, Mohammad Hajiesmaili, Adam Wierman,
-  and Raouf Boutaba.
+\bibitem[Sun et~al.(2023)Sun, Huang, Christianson, Hajiesmaili, Wierman, and Boutaba]{sun2023online}
+Bo~Sun, Jerry Huang, Nicolas Christianson, Mohammad Hajiesmaili, Adam Wierman, and Raouf Boutaba.
 \newblock Online algorithms with uncertainty-quantified predictions.
 \newblock \emph{arXiv preprint arXiv:2310.11558}, 2023.
 
-\bibitem[Tawarmalani \& Sahinidis(2005)Tawarmalani and
-  Sahinidis]{tawarmalani2005polyhedral}
+\bibitem[Tawarmalani \& Sahinidis(2005)Tawarmalani and Sahinidis]{tawarmalani2005polyhedral}
 Mohit Tawarmalani and Nikolaos~V Sahinidis.
 \newblock A polyhedral branch-and-cut approach to global optimization.
-\newblock \emph{Mathematical programming}, 103\penalty0 (2):\penalty0 225--249,
-  2005.
+\newblock \emph{Mathematical programming}, 103\penalty0 (2):\penalty0 225--249, 2005.
 
-\bibitem[Tibshirani et~al.(2019)Tibshirani, Foygel~Barber, Cand{\`e}s, and
-  Ramdas]{tibshirani2019conformal}
-Ryan~J. Tibshirani, Rina Foygel~Barber, Emmanuel Cand{\`e}s, and Aaditya
-  Ramdas.
+\bibitem[Tibshirani et~al.(2019)Tibshirani, Foygel~Barber, Cand{\`e}s, and Ramdas]{tibshirani2019conformal}
+Ryan~J. Tibshirani, Rina Foygel~Barber, Emmanuel Cand{\`e}s, and Aaditya Ramdas.
 \newblock Conformal prediction under covariate shift.
-\newblock In \emph{Advances in Neural Information Processing Systems},
-  volume~32, 2019.
+\newblock In \emph{Advances in Neural Information Processing Systems}, volume~32, 2019.
 
 \bibitem[Van~Hentenryck(2021)]{van2021machine}
 Pascal Van~Hentenryck.
 \newblock Machine learning for optimal power flows.
-\newblock \emph{Tutorials in Operations Research: Emerging Optimization Methods
-  and Modeling Techniques with Applications}, pp.\  62--82, 2021.
+\newblock \emph{Tutorials in Operations Research: Emerging Optimization Methods and Modeling Techniques with Applications}, pp.\  62--82, 2021.
 
 \bibitem[Vovk et~al.(2005)Vovk, Gammerman, and Shafer]{vovk2005algorithmic}
 Vladimir Vovk, Alexander Gammerman, and Glenn Shafer.
 \newblock \emph{Algorithmic Learning in a Random World}.
 \newblock Springer, 2005.
 
-\bibitem[W{\"a}chter \& Biegler(2006)W{\"a}chter and
-  Biegler]{wachter2006implementation}
+\bibitem[W{\"a}chter \& Biegler(2006)W{\"a}chter and Biegler]{wachter2006implementation}
 Andreas W{\"a}chter and Lorenz~T Biegler.
-\newblock On the implementation of an interior-point filter line-search
-  algorithm for large-scale nonlinear programming.
-\newblock \emph{Mathematical programming}, 106\penalty0 (1):\penalty0 25--57,
-  2006.
+\newblock On the implementation of an interior-point filter line-search algorithm for large-scale nonlinear programming.
+\newblock \emph{Mathematical programming}, 106\penalty0 (1):\penalty0 25--57, 2006.
 
 \bibitem[Xu et~al.(2021)Xu, Ma, Molzahn, Hijazi, and Josz]{xu2021verifying}
 Sikun Xu, Ruoyi Ma, Daniel~K Molzahn, Hassan Hijazi, and C{\'e}dric Josz.
-\newblock Verifying global optimality of candidate solutions to polynomial
-  optimization problems using a determinant relaxation hierarchy.
-\newblock In \emph{2021 60th IEEE Conference on Decision and Control (CDC)},
-  pp.\  3143--3148. IEEE, 2021.
+\newblock Verifying global optimality of candidate solutions to polynomial optimization problems using a determinant relaxation hierarchy.
+\newblock In \emph{2021 60th IEEE Conference on Decision and Control (CDC)}, pp.\  3143--3148. IEEE, 2021.
 
 \bibitem[Zhang et~al.(2018)Zhang, Josz, and Sojoudi]{zhang2018conic}
 Richard~Y Zhang, C{\'e}dric Josz, and Somayeh Sojoudi.
-\newblock Conic optimization theory: Convexification techniques and numerical
-  algorithms.
-\newblock In \emph{2018 Annual American Control Conference (ACC)}, pp.\
-  798--815. IEEE, 2018.
+\newblock Conic optimization theory: Convexification techniques and numerical algorithms.
+\newblock In \emph{2018 Annual American Control Conference (ACC)}, pp.\  798--815. IEEE, 2018.
 
 \end{thebibliography}

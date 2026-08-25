@@ -73,6 +73,25 @@ def _mimo_truth():
     return (d ** 2).sum(axis=2).min(axis=1)
 
 
+def _mimo_large_truth():
+    """Large-scale MIMO exact ground truth: brute-force ML detection over
+    x in {-1,1}^16 (2^16 = 65,536 candidates). NOT intractable -- ~3.9ms/instance
+    vectorized, ~19s for the full 5000-row test set -- so unlike _mimo_truth()'s
+    small case, this loops per-instance rather than broadcasting all N instances
+    against all candidates at once (an (N, 2^16, 2m) array would be ~167GB here)."""
+    from problems.mimo_detection_large.problem import A_REAL, N_TRANSMITTERS
+    import itertools
+    b_cols = [f"b{i}" for i in range(A_REAL.shape[0])]
+    theta, v, f = _feasible_theta(DATA / "mimo_detection_large" / "test_5000.csv", b_cols)
+    cands = np.array(list(itertools.product([-1.0, 1.0], repeat=N_TRANSMITTERS)))
+    Hc = (A_REAL @ cands.T).T                    # (2^16, 2m)
+    v_true = np.empty(len(theta))
+    for i, y in enumerate(theta):
+        d = Hc - y[None, :]
+        v_true[i] = np.einsum("ij,ij->i", d, d).min()
+    return v_true
+
+
 def _acopf_chordal_truth(case, n_socp_rows):
     """Return chordal-SDP value aligned to the SOCP post-filter prediction rows.
 
